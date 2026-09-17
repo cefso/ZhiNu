@@ -335,6 +335,77 @@ test('rollback rejects cross-customer version event', { skip }, async () => {
   assert.equal(bad.statusCode, 400, bad.body);
 });
 
+test('portrait git versions create list diff restore', { skip }, async () => {
+  const cookie = await loginAsAdmin(app);
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/customers',
+    headers: { cookie },
+    payload: { name: '版本客户' },
+  });
+  assert.equal(created.statusCode, 200, created.body);
+  const customerId = created.json().customer.id as string;
+
+  // init version from customer create
+  let list = await app.inject({
+    method: 'GET',
+    url: `/api/customers/${customerId}/versions`,
+    headers: { cookie },
+  });
+  assert.equal(list.statusCode, 200, list.body);
+  assert.ok(list.json().versions.length >= 1);
+
+  await app.inject({
+    method: 'POST',
+    url: `/api/customers/${customerId}/insights`,
+    headers: { cookie },
+    payload: { dimension: 'business', title: '目标A', body: '内容A' },
+  });
+
+  list = await app.inject({
+    method: 'GET',
+    url: `/api/customers/${customerId}/versions`,
+    headers: { cookie },
+  });
+  const versions = list.json().versions as { number: number; isHead: boolean }[];
+  assert.ok(versions.length >= 2);
+  const head = versions.find((v) => v.isHead)!;
+  const oldest = versions[versions.length - 1];
+
+  const detail = await app.inject({
+    method: 'GET',
+    url: `/api/customers/${customerId}/versions/${oldest.number}`,
+    headers: { cookie },
+  });
+  assert.equal(detail.statusCode, 200);
+  assert.ok(detail.json().version.snapshot);
+
+  const diff = await app.inject({
+    method: 'GET',
+    url: `/api/customers/${customerId}/versions/${oldest.number}/diff?with=head`,
+    headers: { cookie },
+  });
+  assert.equal(diff.statusCode, 200, diff.body);
+  assert.ok(diff.json().diff);
+
+  const restore = await app.inject({
+    method: 'POST',
+    url: `/api/customers/${customerId}/versions/${oldest.number}/restore`,
+    headers: { cookie },
+  });
+  assert.equal(restore.statusCode, 200, restore.body);
+  assert.equal(restore.json().version.number, head.number + 1);
+
+  list = await app.inject({
+    method: 'GET',
+    url: `/api/customers/${customerId}/versions`,
+    headers: { cookie },
+  });
+  const after = list.json().versions as { number: number; isHead: boolean; message: string }[];
+  assert.equal(after[0].number, head.number + 1);
+  assert.ok(after[0].message.includes('恢复'));
+});
+
 test('recompute with stub LLM is append-only', { skip }, async () => {
   const cookie = await loginAsAdmin(app);
   const created = await app.inject({

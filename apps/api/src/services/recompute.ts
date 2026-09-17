@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { withReadTx, withWriteTx } from '../neo4j.js';
 import { recomputeWithLlm } from '../llm.js';
+import { createPortraitVersion } from './versions.js';
 
 export async function recomputeCustomerPortrait(
   customerId: string,
@@ -175,6 +176,13 @@ export async function recomputeCustomerPortrait(
            p.lastEventCount = $eventCount`,
       { customerId, llmRunId, eventCount: input.events.length },
     );
+  });
+
+  await createPortraitVersion({
+    customerId,
+    message: `LLM 重算 · 新增 ${createdIds.length} 条洞察`,
+    reason: 'llm',
+    createdBy: 'system',
   });
 
   return {

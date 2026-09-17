@@ -11,9 +11,12 @@ const CONSTRAINTS = [
   'CREATE CONSTRAINT event_id IF NOT EXISTS FOR (e:Event) REQUIRE e.id IS UNIQUE',
   'CREATE CONSTRAINT insight_id IF NOT EXISTS FOR (i:Insight) REQUIRE i.id IS UNIQUE',
   'CREATE CONSTRAINT note_id IF NOT EXISTS FOR (n:Note) REQUIRE n.id IS UNIQUE',
+  'CREATE CONSTRAINT version_id IF NOT EXISTS FOR (v:PortraitVersion) REQUIRE v.id IS UNIQUE',
+  'CREATE CONSTRAINT version_num IF NOT EXISTS FOR (v:PortraitVersion) REQUIRE (v.customerId, v.number) IS UNIQUE',
   'CREATE INDEX event_customer IF NOT EXISTS FOR (e:Event) ON (e.customerId)',
   'CREATE INDEX insight_customer IF NOT EXISTS FOR (i:Insight) ON (i.customerId)',
   'CREATE INDEX insight_dimension IF NOT EXISTS FOR (i:Insight) ON (i.dimension)',
+  'CREATE INDEX portrait_version_customer IF NOT EXISTS FOR (v:PortraitVersion) ON (v.customerId)',
 ];
 
 export async function ensureSchema() {

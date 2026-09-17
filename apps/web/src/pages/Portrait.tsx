@@ -33,6 +33,41 @@ type WorkEventLite = {
   status: string;
 };
 
+type VersionListItem = {
+  number: number;
+  message: string;
+  reason: string;
+  createdAt: string;
+  isHead: boolean;
+};
+
+type VersionDetail = {
+  number: number;
+  message: string;
+  reason: string;
+  createdAt: string;
+  snapshot: {
+    dimensions: Record<string, { insights: { title: string; body: string }[] }>;
+    systems: { name: string }[];
+    notes: { title: string; body: string }[];
+    eventCount: number;
+  };
+};
+
+type DiffResult = {
+  from: { number: number; message: string };
+  to: { number: number; message: string; label: string };
+  diff: {
+    dimensions: { key: string; added: string[]; removed: string[]; changed: string[] }[];
+    systemsAdded: string[];
+    systemsRemoved: string[];
+    notesAdded: string[];
+    notesChanged: string[];
+    notesRemoved: string[];
+    eventCount: { from: number; to: number };
+  };
+};
+
 type PortraitDetail = {
   customer: { id: string; name: string; company?: string };
   systems: { id: string; name: string }[];
@@ -74,6 +109,15 @@ export default function PortraitPage() {
       ),
     [id],
   );
+  const versions = useAsync(
+    () => api<{ versions: VersionListItem[] }>(`/api/customers/${id}/versions`),
+    [id],
+  );
+
+  const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
+  const [versionDetail, setVersionDetail] = useState<VersionDetail | null>(null);
+  const [versionDiff, setVersionDiff] = useState<DiffResult | null>(null);
+  const [versionBusy, setVersionBusy] = useState(false);
 
   const [selected, setSelected] = useState<string[]>([]);
   const [insightOpen, setInsightOpen] = useState(false);
@@ -142,6 +186,47 @@ export default function PortraitPage() {
       body: JSON.stringify({ version }),
     });
     reload();
+  }
+
+  async function openVersion(n: number) {
+    setVersionBusy(true);
+    setSelectedVersion(n);
+    try {
+      const detail = await api<{ version: VersionDetail }>(`/api/customers/${id}/versions/${n}`);
+      setVersionDetail(detail.version);
+      const head = versions.data?.versions.find((v) => v.isHead)?.number;
+      if (head != null && head !== n) {
+        const d = await api<DiffResult>(`/api/customers/${id}/versions/${n}/diff?with=head`);
+        setVersionDiff(d);
+      } else {
+        setVersionDiff(null);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '加载版本失败');
+      setSelectedVersion(null);
+      setVersionDetail(null);
+    } finally {
+      setVersionBusy(false);
+    }
+  }
+
+  async function restoreVersion(n: number) {
+    if (!confirm(`恢复到 v${n}？将生成新版本（历史保留）。`)) return;
+    setVersionBusy(true);
+    try {
+      await api(`/api/customers/${id}/versions/${n}/restore`, { method: 'POST' });
+      setSelectedVersion(null);
+      setVersionDetail(null);
+      setVersionDiff(null);
+      reload();
+      versions.reload();
+      graph.reload();
+      events.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '恢复失败');
+    } finally {
+      setVersionBusy(false);
+    }
   }
 
   return (
@@ -317,6 +402,44 @@ export default function PortraitPage() {
         </section>
 
         <aside className="wb-rail">
+          <h3>版本时间线</h3>
+          {(versions.data?.versions ?? []).map((v) => (
+            <div
+              key={v.number}
+              className={`rail-note version-row${v.isHead ? ' head' : ''}${selectedVersion === v.number ? ' sel' : ''}`}
+            >
+              <div className="row space-between">
+                <strong>
+                  v{v.number}
+                  {v.isHead ? <span className="badge pin">HEAD</span> : null}
+                </strong>
+                <span className="badge">{v.reason}</span>
+              </div>
+              <p>{v.message}</p>
+              <div className="muted small">{String(v.createdAt).slice(0, 16).replace('T', ' ')}</div>
+              <div className="row" style={{ marginTop: '0.35rem' }}>
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  disabled={versionBusy}
+                  onClick={() => openVersion(v.number)}
+                >
+                  查看 / 对比
+                </button>
+                {!v.isHead ? (
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    disabled={versionBusy}
+                    onClick={() => restoreVersion(v.number)}
+                  >
+                    恢复到此版
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+
           <h3>概览</h3>
           <div className="stat-grid">
             <div>
@@ -591,6 +714,106 @@ export default function PortraitPage() {
             </button>
           </form>
         </Modal>
+      ) : null}
+    {selectedVersion != null && versionDetail ? (
+        <div className="modal-backdrop" onClick={() => {
+          setSelectedVersion(null);
+          setVersionDetail(null);
+          setVersionDiff(null);
+        }}>
+          <div className="modal wide card" onClick={(e) => e.stopPropagation()}>
+            <div className="row space-between">
+              <h2>
+                v{versionDetail.number} · {versionDetail.message}
+              </h2>
+              <button
+                type="button"
+                className="btn ghost sm"
+                onClick={() => {
+                  setSelectedVersion(null);
+                  setVersionDetail(null);
+                  setVersionDiff(null);
+                }}
+              >
+                关闭
+              </button>
+            </div>
+            <p className="muted small">
+              {versionDetail.reason} · {String(versionDetail.createdAt).slice(0, 16).replace('T', ' ')}
+              {' · '}
+              记录 {versionDetail.snapshot.eventCount}
+            </p>
+
+            {versionDiff ? (
+              <section className="diff-box">
+                <h2>相对 {versionDiff.to.label} 的差别</h2>
+                {versionDiff.diff.dimensions.map((d) => {
+                  if (!d.added.length && !d.removed.length && !d.changed.length) return null;
+                  return (
+                    <div key={d.key} className="diff-row">
+                      <strong>{d.key}</strong>
+                      {d.added.length ? <div className="diff-add">+ {d.added.join(' | ')}</div> : null}
+                      {d.removed.length ? <div className="diff-del">− {d.removed.join(' | ')}</div> : null}
+                      {d.changed.length ? <div className="diff-chg">~ {d.changed.join(' | ')}</div> : null}
+                    </div>
+                  );
+                })}
+                {versionDiff.diff.systemsAdded.length ? (
+                  <div className="diff-add">系统 + {versionDiff.diff.systemsAdded.join('、')}</div>
+                ) : null}
+                {versionDiff.diff.systemsRemoved.length ? (
+                  <div className="diff-del">系统 − {versionDiff.diff.systemsRemoved.join('、')}</div>
+                ) : null}
+                {versionDiff.diff.notesChanged.length ? (
+                  <div className="diff-chg">备注有更新</div>
+                ) : null}
+              </section>
+            ) : null}
+
+            <section>
+              <h2>该版本七维快照</h2>
+              {Object.entries(versionDetail.snapshot.dimensions).map(([key, dim]) =>
+                dim.insights.length ? (
+                  <div key={key} className="rail-note">
+                    <strong>{key}</strong>
+                    <ul className="insight-list" style={{ marginTop: '0.4rem' }}>
+                      {dim.insights.map((i, idx) => (
+                        <li key={idx}>
+                          <strong>{i.title}</strong>
+                          <p className="muted">{i.body}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null,
+              )}
+              {versionDetail.snapshot.systems.length ? (
+                <div className="chips" style={{ marginTop: '0.5rem' }}>
+                  {versionDetail.snapshot.systems.map((s) => (
+                    <span key={s.name} className="chip">
+                      {s.name}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+
+            {!versionDetail || selectedVersion === null ? null : (
+              versions.data?.versions.find((v) => v.isHead)?.number === selectedVersion ? null : (
+                <div className="row" style={{ marginTop: '1rem' }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={versionBusy}
+                    onClick={() => restoreVersion(selectedVersion)}
+                  >
+                    恢复到 v{selectedVersion}（生成新版本）
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        </div>
       ) : null}
     </div>
   );

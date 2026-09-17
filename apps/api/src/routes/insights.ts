@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { withReadTx, withWriteTx } from '../neo4j.js';
 import { requireAuth } from '../auth.js';
+import { snapshotAfter } from '../services/snapshot.js';
 
 const DIMENSIONS = z.enum([
   'profile',
@@ -98,6 +99,7 @@ export async function insightRoutes(app: FastifyInstance) {
     });
 
     if ('notFound' in result) return reply.code(404).send({ error: 'Customer not found' });
+    await snapshotAfter(customerId, `人工洞察：${parsed.data.title}`, 'insight', auth.userId);
     return { insight: { id, ...parsed.data, source: 'human', status: 'active', pinned: false } };
   });
 
@@ -186,6 +188,7 @@ export async function insightRoutes(app: FastifyInstance) {
     if ('notActive' in result) {
       return reply.code(400).send({ error: 'All source insights must be active' });
     }
+    await snapshotAfter(result.customerId, `合并洞察：${parsed.data.title}`, 'insight', auth.userId);
     return {
       insight: { id: newId, ...parsed.data, source: 'human', status: 'active' },
       mergedFrom: parsed.data.sourceInsightIds,
@@ -201,16 +204,17 @@ export async function insightRoutes(app: FastifyInstance) {
         `MATCH (i:Insight {id: $id, status: 'active'})
          MATCH (i)-[:MERGES]->(old:Insight {status: 'merged'})
          SET old.status = 'active', i.status = 'retired'
-         RETURN collect(old.id) AS restored`,
+         RETURN collect(old.id) AS restored, collect(DISTINCT i.customerId)[0] AS customerId`,
         { id },
       );
       const restored = (merged.records[0]?.get('restored') as string[]) ?? [];
       if (restored.length === 0) return { notFound: true as const };
-      return { restored };
+      return { restored, customerId: merged.records[0].get('customerId') as string };
     });
     if ('notFound' in result) {
       return reply.code(404).send({ error: 'Active merged insight not found' });
     }
+    await snapshotAfter(result.customerId, `撤销合并`, 'insight', auth.userId);
     return { ok: true, restored: result.restored };
   });
 
@@ -218,16 +222,19 @@ export async function insightRoutes(app: FastifyInstance) {
     const auth = requireAuth(req, reply);
     if (!auth) return;
     const { id } = req.params as { id: string };
-    const ok = await withWriteTx(async (tx) => {
+    const result = await withWriteTx(async (tx) => {
       const res = await tx.run(
         `MATCH (i:Insight {id: $id})
          SET i.status = 'retired'
-         RETURN i.id AS id`,
+         RETURN i.customerId AS customerId`,
         { id },
       );
-      return res.records.length > 0;
+      const rec = res.records[0];
+      if (!rec) return null;
+      return rec.get('customerId') as string;
     });
-    if (!ok) return reply.code(404).send({ error: 'Insight not found' });
+    if (!result) return reply.code(404).send({ error: 'Insight not found' });
+    await snapshotAfter(result, `作废洞察`, 'insight', auth.userId);
     return { ok: true };
   });
 
@@ -237,16 +244,24 @@ export async function insightRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const parsed = z.object({ pinned: z.boolean().default(true) }).safeParse(req.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid body' });
-    const ok = await withWriteTx(async (tx) => {
+    const result = await withWriteTx(async (tx) => {
       const res = await tx.run(
         `MATCH (i:Insight {id: $id, status: 'active'})
          SET i.pinned = $pinned
-         RETURN i.id AS id`,
+         RETURN i.customerId AS customerId`,
         { id, pinned: parsed.data.pinned },
       );
-      return res.records.length > 0;
+      const rec = res.records[0];
+      if (!rec) return null;
+      return rec.get('customerId') as string;
     });
-    if (!ok) return reply.code(404).send({ error: 'Active insight not found' });
+    if (!result) return reply.code(404).send({ error: 'Active insight not found' });
+    await snapshotAfter(
+      result,
+      parsed.data.pinned ? `置顶洞察` : `取消置顶`,
+      'insight',
+      auth.userId,
+    );
     return { ok: true, pinned: parsed.data.pinned };
   });
 }
@@ -322,6 +337,7 @@ export async function noteRoutes(app: FastifyInstance) {
 
     if ('notFound' in result) return reply.code(404).send({ error: 'Customer not found' });
     if ('targetNotFound' in result) return reply.code(404).send({ error: 'Note target not found' });
+    await snapshotAfter(parsed.data.customerId, `写备注：${parsed.data.title}`, 'note', auth.userId);
     return { note: { id, ...parsed.data, currentVersion: 1 } };
   });
 
@@ -395,6 +411,15 @@ export async function noteRoutes(app: FastifyInstance) {
     });
 
     if ('notFound' in result) return reply.code(404).send({ error: 'Note not found' });
+    const noteOwner = await withReadTx(async (tx) => {
+      const res = await tx.run(`MATCH (n:Note {id: $id}) RETURN n.customerId AS customerId`, {
+        id,
+      });
+      return res.records[0]?.get('customerId') as string | undefined;
+    });
+    if (noteOwner) {
+      await snapshotAfter(noteOwner, `编辑备注：${parsed.data.title}`, 'note', auth.userId);
+    }
     return { ok: true, currentVersion: result.currentVersion };
   });
 

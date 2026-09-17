@@ -4,6 +4,7 @@ import { z } from 'zod';
 import neo4jDriver from 'neo4j-driver';
 import { withReadTx, withWriteTx } from '../neo4j.js';
 import { requireAuth } from '../auth.js';
+import { snapshotAfter } from '../services/snapshot.js';
 
 export async function eventRoutes(app: FastifyInstance) {
   app.get('/', async (req, reply) => {
@@ -123,6 +124,12 @@ export async function eventRoutes(app: FastifyInstance) {
     });
 
     if ('notFound' in created) return reply.code(404).send({ error: 'Customer not found' });
+    await snapshotAfter(
+      parsed.data.customerId,
+      `新增记录：${parsed.data.title}`,
+      'event',
+      auth.userId,
+    );
     return {
       event: { id, ...parsed.data, status: 'active' },
       needsRecompute: true,
@@ -205,6 +212,12 @@ export async function eventRoutes(app: FastifyInstance) {
     if ('notActive' in result) {
       return reply.code(400).send({ error: 'Only active events can be superseded' });
     }
+    await snapshotAfter(
+      result.customerId,
+      `修正记录：${parsed.data.title}`,
+      'event',
+      auth.userId,
+    );
     return { event: { id: newId, supersedes: id, ...parsed.data }, needsRecompute: true };
   });
 
@@ -216,12 +229,15 @@ export async function eventRoutes(app: FastifyInstance) {
       const res = await tx.run(
         `MATCH (e:Event {id: $id})
          SET e.status = 'voided'
-         RETURN e.id AS id`,
+         RETURN e.customerId AS customerId`,
         { id },
       );
-      return res.records.length > 0;
+      const rec = res.records[0];
+      if (!rec) return null;
+      return rec.get('customerId') as string;
     });
     if (!result) return reply.code(404).send({ error: 'Event not found' });
+    await snapshotAfter(result, `作废记录`, 'event', auth.userId);
     return { ok: true, needsRecompute: true };
   });
 
@@ -302,6 +318,12 @@ export async function eventRoutes(app: FastifyInstance) {
     if ('crossCustomer' in result) {
       return reply.code(400).send({ error: 'Version event belongs to another customer' });
     }
+    await snapshotAfter(
+      result.customerId,
+      `回退记录内容至历史版`,
+      'event',
+      auth.userId,
+    );
     return {
       event: { id: newId, supersedes: id, restoredFrom: parsed.data.versionEventId },
       needsRecompute: true,

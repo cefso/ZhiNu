@@ -620,6 +620,45 @@ button:disabled {
   overflow: auto;
 }
 
+.modal.wide {
+  width: min(720px, 100%);
+}
+
+.version-row.head {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.version-row.sel {
+  outline: 2px solid var(--accent);
+}
+
+.diff-box {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  margin: 0.75rem 0;
+}
+
+.diff-row {
+  margin-bottom: 0.45rem;
+}
+
+.diff-add {
+  color: var(--ok);
+  font-size: 0.88rem;
+}
+
+.diff-del {
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.diff-chg {
+  color: var(--warn);
+  font-size: 0.88rem;
+}
+
 .sticky-merge {
   position: fixed;
   right: 1.5rem;

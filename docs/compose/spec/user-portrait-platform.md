@@ -264,6 +264,25 @@ API 补充：
 - 全站焦点环 `outline: 2px solid var(--accent)`，禁用 `outline: none`
 - 字体：系统中文栈（PingFang SC / Noto Sans SC / system-ui）
 
+### 画像版本时间线（git 式 · 2026-09-17 修订）
+
+「时间线」对每个客户是一条**版本库**，不是单纯工作记录列表：
+
+- **PortraitVersion** = 一次提交：七维展示态快照（各维有效洞察 + 系统/联系人 + 当前备注卡）+ `message` + `reason` + `parent` 链
+- **HEAD** = `Portrait.currentVersionId`；画像页默认渲染 HEAD
+- 触发新提交：LLM 重算、人工洞察创建/合并/作废/置顶、备注新建/编辑、工作记录追加/修正/作废（事件本身也进时间线）
+- **查看版本 n**：只读该快照；**对比**：版本 n vs HEAD（或 n vs parent）；**恢复到 n**：新建提交，内容=n 的快照（不删历史，类似 revert 成目标内容）
+- 全局「工作时间线」页改为：选客户 → 版本 log（可筛 reason）+ 事件日志混排
+
+API 增量：
+
+| Method | Path | 说明 |
+|---|---|---|
+| GET | /api/customers/:id/versions | 版本列表（含 HEAD 标记） |
+| GET | /api/customers/:id/versions/:number | 版本快照详情 |
+| GET | /api/customers/:id/versions/:number/diff?with=head\|parent\|N | 维度级 diff |
+| POST | /api/customers/:id/versions/:number/restore | 恢复为新版本 |
+
 ### 布局（2026-09-17 修订 · 原型 A）
 
 采用「侧栏工作台」：

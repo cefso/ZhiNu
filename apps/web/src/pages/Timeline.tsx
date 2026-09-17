@@ -52,7 +52,9 @@ export default function TimelinePage() {
       <div className="page-head">
         <div>
           <h1>工作记录时间线</h1>
-          <p className="muted">不可变追加；修正产生新事件并 SUPERSEDES 旧事件；可回退历史版</p>
+          <p className="muted">
+            记录只增不改；画像版本时间线在客户画像右栏（git 式提交 / 对比 / 恢复）
+          </p>
         </div>
       </div>
 
