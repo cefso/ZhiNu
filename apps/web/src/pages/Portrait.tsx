@@ -1,0 +1,844 @@
+import { useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { api } from '../api';
+import { useAsync } from '../hooks';
+import { PORTRAIT_DIMENSIONS } from '@zhinu/shared';
+
+type Insight = {
+  id: string;
+  dimension: string;
+  title: string;
+  body: string;
+  source: 'llm' | 'human';
+  status: string;
+  pinned: boolean;
+  eventIds?: string[];
+};
+
+type Note = {
+  id: string;
+  kind: string;
+  currentVersion: number;
+  title: string;
+  body: string;
+  targetType: string;
+  targetId: string;
+  occurAt?: string;
+};
+
+type WorkEventLite = {
+  id: string;
+  title: string;
+  occurredAt: string;
+  status: string;
+};
+
+type VersionListItem = {
+  number: number;
+  message: string;
+  reason: string;
+  createdAt: string;
+  isHead: boolean;
+};
+
+type VersionDetail = {
+  number: number;
+  message: string;
+  reason: string;
+  createdAt: string;
+  snapshot: {
+    dimensions: Record<string, { insights: { title: string; body: string }[] }>;
+    systems: { name: string }[];
+    notes: { title: string; body: string }[];
+    eventCount: number;
+  };
+};
+
+type DiffResult = {
+  from: { number: number; message: string };
+  to: { number: number; message: string; label: string };
+  diff: {
+    dimensions: { key: string; added: string[]; removed: string[]; changed: string[] }[];
+    systemsAdded: string[];
+    systemsRemoved: string[];
+    notesAdded: string[];
+    notesChanged: string[];
+    notesRemoved: string[];
+    eventCount: { from: number; to: number };
+  };
+};
+
+type PortraitDetail = {
+  customer: { id: string; name: string; company?: string };
+  systems: { id: string; name: string }[];
+  contacts: { id: string; name: string; title?: string }[];
+  pinned: Insight[];
+  buckets: {
+    dimension: string;
+    insights: Insight[];
+    systems: { id: string; name: string }[];
+    contacts: { id: string; name: string; title?: string }[];
+    notes: Note[];
+  }[];
+  history?: Insight[];
+  lastRecomputedAt?: string;
+  needsRecompute?: boolean;
+};
+
+type GraphNeighbor = {
+  kind: string;
+  id: string;
+  label: string;
+  relation: string;
+};
+
+export default function PortraitPage() {
+  const { id } = useParams();
+  const { data, error, loading, reload } = useAsync(
+    () => api<{ portrait: PortraitDetail }>(`/api/customers/${id}`),
+    [id],
+  );
+  const graph = useAsync(
+    () => api<{ neighbors: GraphNeighbor[] }>(`/api/customers/${id}/graph`),
+    [id],
+  );
+  const events = useAsync(
+    () =>
+      api<{ events: WorkEventLite[] }>(
+        `/api/events?customerId=${id}&status=all&limit=20`,
+      ),
+    [id],
+  );
+  const versions = useAsync(
+    () => api<{ versions: VersionListItem[] }>(`/api/customers/${id}/versions`),
+    [id],
+  );
+
+  const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
+  const [versionDetail, setVersionDetail] = useState<VersionDetail | null>(null);
+  const [versionDiff, setVersionDiff] = useState<DiffResult | null>(null);
+  const [versionBusy, setVersionBusy] = useState(false);
+
+  const [selected, setSelected] = useState<string[]>([]);
+  const [insightOpen, setInsightOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [recomputing, setRecomputing] = useState(false);
+  const [mergeForm, setMergeForm] = useState({ title: '', body: '', dimension: 'service' });
+  const [insightForm, setInsightForm] = useState({
+    dimension: 'service',
+    title: '',
+    body: '',
+  });
+  const [noteForm, setNoteForm] = useState({
+    targetType: 'Customer' as 'Customer' | 'System',
+    targetId: '',
+    kind: 'release',
+    title: '',
+    body: '',
+  });
+
+  if (loading) return <div className="page-pad muted">加载画像…</div>;
+  if (error) return <div className="page-pad error">{error}</div>;
+  if (!data) return null;
+  const p = data.portrait;
+
+  const activeCount = p.buckets.reduce((n, b) => n + b.insights.length, 0);
+  const noteCount = p.buckets.reduce((n, b) => n + b.notes.length, 0);
+
+  async function togglePin(insightId: string, pinned: boolean) {
+    await api(`/api/insights/${insightId}/pin`, {
+      method: 'POST',
+      body: JSON.stringify({ pinned }),
+    });
+    reload();
+  }
+
+  async function retire(insightId: string) {
+    if (!confirm('作废这条洞察？')) return;
+    await api(`/api/insights/${insightId}/retire`, { method: 'POST' });
+    reload();
+  }
+
+  async function unmerge(insightId: string) {
+    await api(`/api/insights/${insightId}/unmerge`, { method: 'POST' });
+    reload();
+  }
+
+  async function showVersions(note: Note) {
+    const res = await api<{
+      currentVersion: number;
+      versions: { version: number; title: string; body: string }[];
+    }>(`/api/notes/${note.id}/versions`);
+    const lines = res.versions
+      .map(
+        (v) =>
+          `v${v.version}${v.version === res.currentVersion ? '（当前）' : ''}: ${v.title}\n${v.body}`,
+      )
+      .join('\n\n');
+    const pick = prompt(
+      `选择要回退到的版本号（1–${res.versions.length}）\n\n${lines}`,
+      String(res.currentVersion),
+    );
+    const version = Number(pick);
+    if (!pick || Number.isNaN(version)) return;
+    await api(`/api/notes/${note.id}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ version }),
+    });
+    reload();
+  }
+
+  async function openVersion(n: number) {
+    setVersionBusy(true);
+    setSelectedVersion(n);
+    try {
+      const detail = await api<{ version: VersionDetail }>(`/api/customers/${id}/versions/${n}`);
+      setVersionDetail(detail.version);
+      const head = versions.data?.versions.find((v) => v.isHead)?.number;
+      if (head != null && head !== n) {
+        const d = await api<DiffResult>(`/api/customers/${id}/versions/${n}/diff?with=head`);
+        setVersionDiff(d);
+      } else {
+        setVersionDiff(null);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '加载版本失败');
+      setSelectedVersion(null);
+      setVersionDetail(null);
+    } finally {
+      setVersionBusy(false);
+    }
+  }
+
+  async function restoreVersion(n: number) {
+    if (!confirm(`恢复到 v${n}？将生成新版本（历史保留）。`)) return;
+    setVersionBusy(true);
+    try {
+      await api(`/api/customers/${id}/versions/${n}/restore`, { method: 'POST' });
+      setSelectedVersion(null);
+      setVersionDetail(null);
+      setVersionDiff(null);
+      reload();
+      versions.reload();
+      graph.reload();
+      events.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '恢复失败');
+    } finally {
+      setVersionBusy(false);
+    }
+  }
+
+  return (
+    <div className="workbench">
+      <header className="wb-head">
+        <div>
+          <h1>{p.customer.name}</h1>
+          <div className="muted small">
+            {p.customer.company ? `${p.customer.company} · ` : ''}
+            七维画像
+            {p.lastRecomputedAt ? ` · 上次重算 ${String(p.lastRecomputedAt).slice(0, 10)}` : ''}
+            {p.needsRecompute ? ' · 建议重算' : ''}
+          </div>
+        </div>
+        <div className="row">
+          <Link to="/customers" className="btn ghost">
+            客户管理
+          </Link>
+          <button type="button" className="btn ghost" onClick={() => setInsightOpen(true)}>
+            写洞察
+          </button>
+          <button type="button" className="btn ghost" onClick={() => setNoteOpen(true)}>
+            写备注
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={recomputing}
+            onClick={async () => {
+              setRecomputing(true);
+              try {
+                await api(`/api/customers/${id}/recompute`, { method: 'POST' });
+                reload();
+                graph.reload();
+                events.reload();
+              } catch (err) {
+                alert(err instanceof Error ? err.message : '重算失败');
+              } finally {
+                setRecomputing(false);
+              }
+            }}
+          >
+            {recomputing ? '重算中…' : 'LLM 重算'}
+          </button>
+        </div>
+      </header>
+
+      <div className="wb-body">
+        <section className="wb-feed">
+          {p.pinned.length > 0 ? (
+            <div className="card dim-section pinned-block">
+              <h2>置顶洞察</h2>
+              <ul className="insight-list">
+                {p.pinned.map((i) => (
+                  <li key={i.id}>
+                    <div className="insight-head">
+                      <strong>{i.title}</strong>
+                      <span className="badge pin">置顶</span>
+                    </div>
+                    <p>{i.body}</p>
+                    <div className="row">
+                      <button
+                        type="button"
+                        className="btn ghost sm"
+                        onClick={() => togglePin(i.id, false)}
+                      >
+                        取消置顶
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {PORTRAIT_DIMENSIONS.map(({ key, label }) => {
+            if (key === 'notes') return null;
+            const bucket = p.buckets.find((b) => b.dimension === key);
+            if (!bucket) return null;
+            if (bucket.insights.length === 0 && bucket.systems.length === 0 && bucket.contacts.length === 0) {
+              return null;
+            }
+            return (
+              <section key={key} className="card dim-section">
+                <h2>{label}</h2>
+                {bucket.systems.length > 0 ? (
+                  <div className="chips">
+                    {bucket.systems.map((s) => (
+                      <span key={s.id} className="chip">
+                        {s.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {bucket.contacts.length > 0 ? (
+                  <div className="chips">
+                    {bucket.contacts.map((c) => (
+                      <span key={c.id} className="chip">
+                        {c.name}
+                        {c.title ? ` · ${c.title}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <ul className="insight-list">
+                  {bucket.insights.map((i) => (
+                    <li key={i.id}>
+                      <div className="insight-head">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={selected.includes(i.id)}
+                            onChange={(e) => {
+                              setSelected((prev) =>
+                                e.target.checked
+                                  ? [...prev, i.id]
+                                  : prev.filter((x) => x !== i.id),
+                              );
+                            }}
+                          />
+                          <strong>{i.title}</strong>
+                        </label>
+                        <span className="badge">{i.source}</span>
+                        {i.pinned ? <span className="badge pin">置顶</span> : null}
+                        {i.eventIds?.length ? (
+                          <span className="muted small">证据 {i.eventIds.length}</span>
+                        ) : null}
+                      </div>
+                      <p>{i.body}</p>
+                      <div className="row">
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          onClick={() => togglePin(i.id, !i.pinned)}
+                        >
+                          {i.pinned ? '取消置顶' : '置顶'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          onClick={() => unmerge(i.id)}
+                        >
+                          撤销合并
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          onClick={() => retire(i.id)}
+                        >
+                          作废
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+
+          {(p.history ?? []).length > 0 ? (
+            <details className="card">
+              <summary>历史洞察（已合并 / 已作废）</summary>
+              <ul className="insight-list" style={{ marginTop: '0.75rem' }}>
+                {(p.history ?? []).map((i) => (
+                  <li key={i.id}>
+                    <strong>{i.title}</strong> <span className="badge">{i.status}</span>
+                    <p className="muted">{i.body}</p>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </section>
+
+        <aside className="wb-rail">
+          <h3>版本时间线</h3>
+          {(versions.data?.versions ?? []).map((v) => (
+            <div
+              key={v.number}
+              className={`rail-note version-row${v.isHead ? ' head' : ''}${selectedVersion === v.number ? ' sel' : ''}`}
+            >
+              <div className="row space-between">
+                <strong>
+                  v{v.number}
+                  {v.isHead ? <span className="badge pin">HEAD</span> : null}
+                </strong>
+                <span className="badge">{v.reason}</span>
+              </div>
+              <p>{v.message}</p>
+              <div className="muted small">{String(v.createdAt).slice(0, 16).replace('T', ' ')}</div>
+              <div className="row" style={{ marginTop: '0.35rem' }}>
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  disabled={versionBusy}
+                  onClick={() => openVersion(v.number)}
+                >
+                  查看 / 对比
+                </button>
+                {!v.isHead ? (
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    disabled={versionBusy}
+                    onClick={() => restoreVersion(v.number)}
+                  >
+                    恢复到此版
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+
+          <h3>概览</h3>
+          <div className="stat-grid">
+            <div>
+              <b>{events.data?.events.filter((e) => e.status === 'active').length ?? 0}</b>
+              <span>有效记录</span>
+            </div>
+            <div>
+              <b>{p.systems.length}</b>
+              <span>业务系统</span>
+            </div>
+            <div>
+              <b>{activeCount}</b>
+              <span>活跃洞察</span>
+            </div>
+            <div>
+              <b>{noteCount}</b>
+              <span>实体备注</span>
+            </div>
+          </div>
+
+          {p.contacts.length > 0 ? (
+            <>
+              <h3>联系人</h3>
+              {p.contacts.map((c) => (
+                <div key={c.id} className="rail-note">
+                  <strong>{c.name}</strong>
+                  {c.title ? <div className="muted small">{c.title}</div> : null}
+                </div>
+              ))}
+            </>
+          ) : null}
+
+          {noteCount > 0 ? (
+            <>
+              <h3>备注卡</h3>
+              {p.buckets.flatMap((b) => b.notes).map((n) => (
+                <div key={n.id} className="rail-note">
+                  <strong>{n.title}</strong>
+                  <p>{n.body}</p>
+                  <div className="row">
+                    <span className="badge">{n.kind}</span>
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={async () => {
+                        const body = prompt('备注新内容', n.body);
+                        if (body == null) return;
+                        await api(`/api/notes/${n.id}`, {
+                          method: 'PATCH',
+                          body: JSON.stringify({ title: n.title, body }),
+                        });
+                        reload();
+                      }}
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={() => showVersions(n)}
+                    >
+                      版本
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : null}
+
+          <h3>最近时间线</h3>
+          {(events.data?.events ?? []).slice(0, 8).map((e) => (
+            <div key={e.id} className="rail-note">
+              <strong>{e.title}</strong>
+              <div className="muted small">
+                {String(e.occurredAt).slice(0, 10)} · {e.status}
+              </div>
+            </div>
+          ))}
+
+          {(graph.data?.neighbors ?? []).length > 0 ? (
+            <>
+              <h3>图邻居</h3>
+              <div className="chips">
+                {(graph.data?.neighbors ?? []).slice(0, 12).map((n) => (
+                  <span key={`${n.kind}:${n.id}`} className="chip" title={n.relation}>
+                    {n.label}
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </aside>
+      </div>
+
+      {selected.length >= 2 ? (
+        <div className="card sticky-merge">
+          <h2>合并 {selected.length} 条洞察</h2>
+          <form
+            className="stack-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await api(`/api/insights/${selected[0]}/merge`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  sourceInsightIds: selected,
+                  dimension: mergeForm.dimension,
+                  title: mergeForm.title,
+                  body: mergeForm.body,
+                }),
+              });
+              setSelected([]);
+              setMergeForm({ title: '', body: '', dimension: 'service' });
+              reload();
+            }}
+          >
+            <select
+              value={mergeForm.dimension}
+              onChange={(e) => setMergeForm({ ...mergeForm, dimension: e.target.value })}
+            >
+              {PORTRAIT_DIMENSIONS.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="合并后标题"
+              value={mergeForm.title}
+              onChange={(e) => setMergeForm({ ...mergeForm, title: e.target.value })}
+              required
+            />
+            <textarea
+              placeholder="合并后正文"
+              value={mergeForm.body}
+              onChange={(e) => setMergeForm({ ...mergeForm, body: e.target.value })}
+              required
+            />
+            <div className="row">
+              <button type="submit" className="btn">
+                合并（旧条目标记 merged）
+              </button>
+              <button type="button" className="btn ghost" onClick={() => setSelected([])}>
+                取消
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {insightOpen ? (
+        <Modal title="写人工洞察" onClose={() => setInsightOpen(false)}>
+          <form
+            className="stack-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await api(`/api/customers/${id}/insights`, {
+                method: 'POST',
+                body: JSON.stringify(insightForm),
+              });
+              setInsightOpen(false);
+              setInsightForm({ dimension: 'service', title: '', body: '' });
+              reload();
+            }}
+          >
+            <select
+              value={insightForm.dimension}
+              onChange={(e) => setInsightForm({ ...insightForm, dimension: e.target.value })}
+            >
+              {PORTRAIT_DIMENSIONS.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="标题"
+              value={insightForm.title}
+              onChange={(e) => setInsightForm({ ...insightForm, title: e.target.value })}
+              required
+            />
+            <textarea
+              placeholder="正文"
+              value={insightForm.body}
+              onChange={(e) => setInsightForm({ ...insightForm, body: e.target.value })}
+              required
+            />
+            <button type="submit" className="btn">
+              保存
+            </button>
+          </form>
+        </Modal>
+      ) : null}
+
+      {noteOpen ? (
+        <Modal title="写实体备注" onClose={() => setNoteOpen(false)}>
+          <form
+            className="stack-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const targetId = noteForm.targetType === 'Customer' ? p.customer.id : noteForm.targetId;
+              if (!targetId) {
+                alert('请选择系统');
+                return;
+              }
+              await api('/api/notes', {
+                method: 'POST',
+                body: JSON.stringify({
+                  customerId: p.customer.id,
+                  targetType: noteForm.targetType,
+                  targetId,
+                  title: noteForm.title,
+                  body: noteForm.body,
+                  kind: noteForm.kind,
+                }),
+              });
+              setNoteOpen(false);
+              setNoteForm({
+                targetType: 'Customer',
+                targetId: '',
+                kind: 'release',
+                title: '',
+                body: '',
+              });
+              reload();
+            }}
+          >
+            <select
+              value={noteForm.targetType}
+              onChange={(e) =>
+                setNoteForm({ ...noteForm, targetType: e.target.value as 'Customer' | 'System' })
+              }
+            >
+              <option value="Customer">客户</option>
+              <option value="System">业务系统</option>
+            </select>
+            {noteForm.targetType === 'System' ? (
+              <select
+                value={noteForm.targetId}
+                onChange={(e) => setNoteForm({ ...noteForm, targetId: e.target.value })}
+                required
+              >
+                <option value="">选择系统</option>
+                {p.systems.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <select
+              value={noteForm.kind}
+              onChange={(e) => setNoteForm({ ...noteForm, kind: e.target.value })}
+            >
+              <option value="general">一般</option>
+              <option value="release">发版</option>
+              <option value="other">其他</option>
+            </select>
+            <input
+              placeholder="标题，如 CRM 3.2 发版"
+              value={noteForm.title}
+              onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
+              required
+            />
+            <textarea
+              placeholder="详情：窗口、内容、风险…"
+              value={noteForm.body}
+              onChange={(e) => setNoteForm({ ...noteForm, body: e.target.value })}
+              required
+            />
+            <button type="submit" className="btn">
+              保存
+            </button>
+          </form>
+        </Modal>
+      ) : null}
+    {selectedVersion != null && versionDetail ? (
+        <div className="modal-backdrop" onClick={() => {
+          setSelectedVersion(null);
+          setVersionDetail(null);
+          setVersionDiff(null);
+        }}>
+          <div className="modal wide card" onClick={(e) => e.stopPropagation()}>
+            <div className="row space-between">
+              <h2>
+                v{versionDetail.number} · {versionDetail.message}
+              </h2>
+              <button
+                type="button"
+                className="btn ghost sm"
+                onClick={() => {
+                  setSelectedVersion(null);
+                  setVersionDetail(null);
+                  setVersionDiff(null);
+                }}
+              >
+                关闭
+              </button>
+            </div>
+            <p className="muted small">
+              {versionDetail.reason} · {String(versionDetail.createdAt).slice(0, 16).replace('T', ' ')}
+              {' · '}
+              记录 {versionDetail.snapshot.eventCount}
+            </p>
+
+            {versionDiff ? (
+              <section className="diff-box">
+                <h2>相对 {versionDiff.to.label} 的差别</h2>
+                {versionDiff.diff.dimensions.map((d) => {
+                  if (!d.added.length && !d.removed.length && !d.changed.length) return null;
+                  return (
+                    <div key={d.key} className="diff-row">
+                      <strong>{d.key}</strong>
+                      {d.added.length ? <div className="diff-add">+ {d.added.join(' | ')}</div> : null}
+                      {d.removed.length ? <div className="diff-del">− {d.removed.join(' | ')}</div> : null}
+                      {d.changed.length ? <div className="diff-chg">~ {d.changed.join(' | ')}</div> : null}
+                    </div>
+                  );
+                })}
+                {versionDiff.diff.systemsAdded.length ? (
+                  <div className="diff-add">系统 + {versionDiff.diff.systemsAdded.join('、')}</div>
+                ) : null}
+                {versionDiff.diff.systemsRemoved.length ? (
+                  <div className="diff-del">系统 − {versionDiff.diff.systemsRemoved.join('、')}</div>
+                ) : null}
+                {versionDiff.diff.notesChanged.length ? (
+                  <div className="diff-chg">备注有更新</div>
+                ) : null}
+              </section>
+            ) : null}
+
+            <section>
+              <h2>该版本七维快照</h2>
+              {Object.entries(versionDetail.snapshot.dimensions).map(([key, dim]) =>
+                dim.insights.length ? (
+                  <div key={key} className="rail-note">
+                    <strong>{key}</strong>
+                    <ul className="insight-list" style={{ marginTop: '0.4rem' }}>
+                      {dim.insights.map((i, idx) => (
+                        <li key={idx}>
+                          <strong>{i.title}</strong>
+                          <p className="muted">{i.body}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null,
+              )}
+              {versionDetail.snapshot.systems.length ? (
+                <div className="chips" style={{ marginTop: '0.5rem' }}>
+                  {versionDetail.snapshot.systems.map((s) => (
+                    <span key={s.name} className="chip">
+                      {s.name}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+
+            {!versionDetail || selectedVersion === null ? null : (
+              versions.data?.versions.find((v) => v.isHead)?.number === selectedVersion ? null : (
+                <div className="row" style={{ marginTop: '1rem' }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={versionBusy}
+                    onClick={() => restoreVersion(selectedVersion)}
+                  >
+                    恢复到 v{selectedVersion}（生成新版本）
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal card" onClick={(e) => e.stopPropagation()}>
+        <div className="row space-between">
+          <h2>{title}</h2>
+          <button type="button" className="btn ghost sm" onClick={onClose}>
+            关闭
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}

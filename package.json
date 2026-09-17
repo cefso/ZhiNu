@@ -1,0 +1,24 @@
+{
+  "name": "zhinu",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@zhinu/api & npm run dev --workspace=@zhinu/web",
+    "dev:api": "npm run dev --workspace=@zhinu/api",
+    "dev:web": "npm run dev --workspace=@zhinu/web",
+    "build": "npm run build --workspace=@zhinu/api && npm run build --workspace=@zhinu/web",
+    "typecheck": "npm run typecheck --workspace=@zhinu/api && npm run typecheck --workspace=@zhinu/web",
+    "test": "npm run test --workspace=@zhinu/api"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.25.12": true
+  }
+}

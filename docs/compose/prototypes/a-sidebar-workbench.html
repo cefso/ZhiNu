@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>原型 A · 侧栏工作台</title>
+<style>
+  :root {
+    --bg:#F4F6FA; --surface:#fff; --ink:#141821; --muted:#5C6478; --line:#DDE2EC;
+    --accent:#4F46E5; --accent-soft:#EEF0FF; --star:#8B7CFF; --side:#0F1219;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:"PingFang SC",system-ui,sans-serif; background:var(--bg); color:var(--ink); height:100vh; overflow:hidden; }
+  .app { display:grid; grid-template-columns:220px 1fr; height:100vh; }
+  .side { background:var(--side); color:#E8EAF2; padding:1.1rem .9rem; display:flex; flex-direction:column; gap:1.5rem; }
+  .logo { display:flex; align-items:center; gap:.45rem; font-weight:650; letter-spacing:.14em; padding:0 .4rem 1rem; border-bottom:1px solid rgba(255,255,255,.08); }
+  .logo i { width:8px; height:8px; border-radius:50%; background:var(--star); box-shadow:0 0 10px var(--star); }
+  .nav a { display:block; color:rgba(232,234,242,.7); text-decoration:none; padding:.55rem .65rem; border-radius:8px; font-size:.9rem; margin-bottom:.15rem; }
+  .nav a.on { background:rgba(79,70,229,.35); color:#fff; }
+  .side-user { margin-top:auto; font-size:.8rem; color:rgba(232,234,242,.5); padding:.4rem; }
+  .main { display:grid; grid-template-rows:auto 1fr; overflow:hidden; }
+  .top { background:var(--surface); border-bottom:1px solid var(--line); padding:.9rem 1.4rem; display:flex; justify-content:space-between; align-items:center; }
+  .top h1 { font-size:1.15rem; font-weight:650; }
+  .top .meta { color:var(--muted); font-size:.85rem; }
+  .btn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:.45rem .9rem; font:inherit; font-weight:500; }
+  .btn.g { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .body { display:grid; grid-template-columns:1fr 280px; overflow:hidden; }
+  .feed { overflow:auto; padding:1.1rem 1.3rem 2rem; }
+  .rail { border-left:1px solid var(--line); background:var(--surface); overflow:auto; padding:1.1rem 1rem; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:.95rem 1.05rem; margin-bottom:.75rem; box-shadow:0 1px 2px rgba(20,24,33,.04); }
+  .dim { border-left:3px solid var(--accent); }
+  .dim.pin { border-left-color:var(--star); background:linear-gradient(180deg,#FAF9FF,#fff 50%); }
+  .dim h2 { font-size:.88rem; font-weight:600; margin-bottom:.55rem; display:flex; align-items:center; gap:.4rem; }
+  .dim h2::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+  .dim.pin h2::before { background:var(--star); }
+  .item { border-top:1px solid var(--line); padding:.65rem 0 .15rem; margin-top:.35rem; }
+  .item:first-of-type { border-top:0; margin-top:0; padding-top:0; }
+  .item strong { font-size:.92rem; }
+  .item p { color:var(--muted); font-size:.84rem; margin-top:.25rem; }
+  .tag { display:inline-flex; font-size:.7rem; padding:.08rem .45rem; border-radius:999px; background:var(--accent-soft); color:var(--accent); margin-left:.35rem; }
+  .chips { display:flex; flex-wrap:wrap; gap:.35rem; margin:.4rem 0 .6rem; }
+  .chip { font-size:.8rem; background:var(--accent-soft); color:#312E81; padding:.18rem .6rem; border-radius:999px; }
+  .rail h3 { font-size:.8rem; color:var(--muted); font-weight:600; letter-spacing:.06em; margin:1rem 0 .5rem; text-transform:uppercase; }
+  .stat { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+  .stat div { background:var(--bg); border-radius:10px; padding:.65rem; }
+  .stat b { display:block; font-size:1.15rem; }
+  .stat span { font-size:.75rem; color:var(--muted); }
+  .note { background:var(--bg); border-radius:10px; padding:.65rem; margin-bottom:.5rem; font-size:.85rem; border:1px solid var(--line); }
+  .actions { display:flex; gap:.4rem; margin-top:.9rem; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo"><i></i>织女</div>
+    <nav class="nav">
+      <a class="on" href="#">客户画像</a>
+      <a href="#">工作时间线</a>
+      <a href="#">系统网络</a>
+      <a href="#">邀请码</a>
+    </nav>
+    <div class="side-user">admin@zhinu.local</div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <div>
+        <h1>张总</h1>
+        <div class="meta">示例科技 · 信息部 · 上次重算 09-16</div>
+      </div>
+      <div class="actions">
+        <button class="btn g">写洞察</button>
+        <button class="btn g">写备注</button>
+        <button class="btn">LLM 重算</button>
+      </div>
+    </header>
+    <div class="body">
+      <section class="feed">
+        <div class="card dim pin">
+          <h2>置顶洞察 <span class="tag">已置顶</span></h2>
+          <div class="item"><strong>关注导出性能，排期敏感</strong><p>多次在月底前反馈导出超时，接受分批方案但要求明确窗口。</p></div>
+        </div>
+        <div class="card dim">
+          <h2>基础与组织关系</h2>
+          <div class="item"><strong>信息部拍板人</strong><p>系统选型与窗口由本人确认，运维执行另有人对接。</p></div>
+        </div>
+        <div class="card dim">
+          <h2>业务背景与目标</h2>
+          <div class="item"><strong>本季度主推数据中台对接</strong><p>CRM 与 ERP 打通是上半年重点，导出链路是卡点。</p></div>
+        </div>
+        <div class="card dim">
+          <h2>系统与技术环境</h2>
+          <div class="chips"><span class="chip">CRM</span><span class="chip">ERP</span><span class="chip">OA</span></div>
+          <div class="item"><strong>CRM 为主操作面</strong><p>导出与权限问题集中在 CRM。</p></div>
+        </div>
+        <div class="card dim">
+          <h2>工作模式与服务历史</h2>
+          <div class="item"><strong>月底集中提工单</strong><p>证据 4 条 · 常见导出/权限/性能。</p></div>
+        </div>
+      </section>
+      <aside class="rail">
+        <h3>概览</h3>
+        <div class="stat">
+          <div><b>4</b><span>有效记录</span></div>
+          <div><b>3</b><span>业务系统</span></div>
+          <div><b>6</b><span>活跃洞察</span></div>
+          <div><b>2</b><span>实体备注</span></div>
+        </div>
+        <h3>联系人</h3>
+        <div class="note">张总 · 信息部主任<br/><span style="color:#5C6478">决策 / 窗口确认</span></div>
+        <h3>备注卡</h3>
+        <div class="note"><strong>CRM 3.2 发版</strong><br/>下周四窗口，含导出优化。</div>
+        <div class="note"><strong>权限模型调整</strong><br/>需在发版前回归。</div>
+        <h3>最近时间线</h3>
+        <div class="note">09-16 CRM导出报错（更正）</div>
+        <div class="note">09-15 OA审批慢</div>
+      </aside>
+    </div>
+  </div>
+</div>
+</body>
+</html>
