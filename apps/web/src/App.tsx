@@ -7,6 +7,7 @@ import CustomersPage from './pages/Customers';
 import PortraitPage from './pages/Portrait';
 import TimelinePage from './pages/Timeline';
 import InvitesPage from './pages/Invites';
+import SettingsPage from './pages/Settings';
 import './styles.css';
 
 export type Me = {
@@ -29,6 +30,12 @@ const NAV = [
     to: '/invites',
     label: '邀请码',
     match: (p: string) => p.startsWith('/invites'),
+    adminOnly: true,
+  },
+  {
+    to: '/settings',
+    label: '设置',
+    match: (p: string) => p.startsWith('/settings'),
     adminOnly: true,
   },
 ];
@@ -134,6 +141,10 @@ export default function App() {
           element={
             me?.user.role === 'admin' ? <InvitesPage /> : <Navigate to="/" replace />
           }
+        />
+        <Route
+          path="/settings"
+          element={me ? <SettingsPage /> : <Navigate to="/login" replace />}
         />
       </Routes>
     </Shell>
