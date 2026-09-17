@@ -362,10 +362,14 @@ export async function noteRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid body' });
 
     const result = await withWriteTx(async (tx) => {
-      const note = await tx.run(`MATCH (n:Note {id: $id}) RETURN n.currentVersion AS cv`, { id });
-      const cv = Number(note.records[0]?.get('cv') ?? 0);
-      if (!cv) return { notFound: true as const };
-      const next = cv + 1;
+      const note = await tx.run(
+        `MATCH (n:Note {id: $id})-[:HAS_VERSION]->(v:NoteVersion)
+         RETURN n, max(v.version) AS maxVersion`,
+        { id },
+      );
+      const rec = note.records[0];
+      if (!rec) return { notFound: true as const };
+      const next = Number(rec.get('maxVersion') ?? 0) + 1;
       await tx.run(
         `MATCH (n:Note {id: $id})
          CREATE (v:NoteVersion {

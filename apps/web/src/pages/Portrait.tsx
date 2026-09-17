@@ -271,15 +271,13 @@ export default function PortraitPage() {
                     >
                       {i.pinned ? '取消置顶' : '置顶'}
                     </button>
-                    {i.source === 'human' || i.status === 'active' ? (
-                      <button
+                    <button
                         type="button"
                         className="ghost"
                         onClick={() => unmerge(i.id)}
                       >
                         撤销合并
                       </button>
-                    ) : null}
                     <button type="button" className="ghost" onClick={() => retire(i.id)}>
                       作废
                     </button>
