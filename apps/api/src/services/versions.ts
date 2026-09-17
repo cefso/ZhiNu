@@ -279,6 +279,122 @@ function insightKey(i: SnapshotInsight) {
   return `${i.title}::${i.body}`;
 }
 
+/** Apply a historical snapshot onto the live graph (used by restore). */
+export async function applyPortraitSnapshot(
+  customerId: string,
+  snapshot: PortraitSnapshot,
+  createdBy: string,
+) {
+  await withWriteTx(async (tx) => {
+    await tx.run(
+      `MATCH (i:Insight {customerId: $id, status: 'active'})
+       SET i.status = 'retired'`,
+      { id: customerId },
+    );
+
+    for (const key of DIMENSION_KEYS) {
+      for (const ins of snapshot.dimensions[key]?.insights ?? []) {
+        await tx.run(
+          `CREATE (i:Insight {
+            id: randomUUID(),
+            customerId: $customerId,
+            dimension: $dimension,
+            title: $title,
+            body: $body,
+            source: 'human',
+            status: 'active',
+            pinned: $pinned,
+            restoredFromInsightId: $oldId,
+            createdAt: datetime(),
+            createdBy: $createdBy
+          })
+          WITH i
+          MATCH (c:Customer {id: $customerId})
+          MERGE (i)-[:ABOUT]->(c)`,
+          {
+            customerId,
+            dimension: key,
+            title: ins.title,
+            body: ins.body,
+            pinned: ins.pinned,
+            oldId: ins.id,
+            createdBy,
+          },
+        );
+      }
+    }
+
+    for (const sys of snapshot.systems) {
+      await tx.run(
+        `MERGE (s:System {name: $name})
+         ON CREATE SET s.id = coalesce($id, randomUUID())
+         WITH s
+         MATCH (c:Customer {id: $customerId})
+         MERGE (c)-[:HAS_SYSTEM]->(s)`,
+        { name: sys.name, id: sys.id, customerId },
+      );
+    }
+    for (const ct of snapshot.contacts) {
+      await tx.run(
+        `MERGE (c:Contact {name: $name})
+         ON CREATE SET c.id = coalesce($id, randomUUID())
+         SET c.title = coalesce($title, c.title)
+         WITH c
+         MATCH (cu:Customer {id: $customerId})
+         MERGE (cu)-[:HAS_CONTACT]->(c)`,
+        { name: ct.name, id: ct.id, title: ct.title ?? null, customerId },
+      );
+    }
+
+    for (const note of snapshot.notes) {
+      const exists = await tx.run(`MATCH (n:Note {id: $id}) RETURN n LIMIT 1`, { id: note.id });
+      if (exists.records.length === 0) {
+        await tx.run(
+          `CREATE (n:Note {
+            id: $id,
+            customerId: $customerId,
+            kind: $kind,
+            currentVersion: 1,
+            createdAt: datetime(),
+            createdBy: $createdBy
+          })
+          CREATE (v:NoteVersion {
+            version: 1, title: $title, body: $body, createdAt: datetime(), createdBy: $createdBy
+          })
+          MERGE (n)-[:HAS_VERSION]->(v)
+          WITH n
+          MATCH (cu:Customer {id: $customerId})
+          MERGE (n)-[:ON_CUSTOMER]->(cu)`,
+          {
+            id: note.id,
+            customerId,
+            kind: note.kind,
+            title: note.title,
+            body: note.body,
+            createdBy,
+          },
+        );
+      } else {
+        await tx.run(
+          `MATCH (n:Note {id: $id})
+           OPTIONAL MATCH (n)-[:HAS_VERSION]->(v:NoteVersion)
+           WITH n, coalesce(max(v.version), 0) AS maxV
+           CREATE (nv:NoteVersion {
+             version: maxV + 1,
+             title: $title,
+             body: $body,
+             createdAt: datetime(),
+             createdBy: $createdBy
+           })
+           MERGE (n)-[:HAS_VERSION]->(nv)
+           SET n.currentVersion = maxV + 1`,
+          { id: note.id, title: note.title, body: note.body, createdBy },
+        );
+      }
+    }
+  });
+}
+
 export function diffSnapshots(from: PortraitSnapshot, to: PortraitSnapshot): SnapshotDiff {
   const dimensions = DIMENSION_KEYS.map((key) => {
     const a = from.dimensions[key]?.insights ?? [];

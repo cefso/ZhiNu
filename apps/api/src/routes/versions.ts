@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth.js';
 import {
+  applyPortraitSnapshot,
   createPortraitVersion,
   diffSnapshots,
   getPortraitVersion,
@@ -72,6 +73,8 @@ export async function versionRoutes(app: FastifyInstance) {
     const { id, number } = req.params as { id: string; number: string };
     const target = await getPortraitVersion(id, Number(number));
     if (!target) return reply.code(404).send({ error: 'Version not found' });
+
+    await applyPortraitSnapshot(id, target.snapshot, auth.userId);
 
     const created = await createPortraitVersion({
       customerId: id,

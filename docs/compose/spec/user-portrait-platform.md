@@ -104,6 +104,33 @@ Browser ──session──► Fastify ──► Neo4j
 
 **约束**：`User.email`、`*.id`、`Invite.code` 唯一。
 
+### 画像版本快照（git 式客户时间线，2026-09-17）
+
+与「工作记录时间线」并行：**每个客户**有独立的 **PortraitVersion 版本链**（Neo4j `PortraitVersion` 节点 + `Portrait-[:HEAD]->`）。
+
+```text
+v1 init → v2 insight/note → v3 llm → v4 edit → v5 restore
+         ↑ 点开查看快照 + 与 HEAD diff；可「恢复到此版」（追加新版本，历史保留）
+```
+
+**节点** `PortraitVersion { id, customerId, number, message, reason, parentNumber, snapshot, createdAt, createdBy }`
+
+- `reason`: `init` | `llm` | `insight` | `note` | `event` | `restore`
+- `snapshot`: 完整七维洞察 + 系统/联系人/备注/有效记录数 的 JSON
+
+**打版本时机**：客户创建（init）、洞察/备注/工作记录变更后 best-effort、LLM 重算、恢复版本。
+
+**API**
+
+| Method | Path | 说明 |
+|---|---|---|
+| GET | /api/customers/:id/versions | 版本列表（含 isHead） |
+| GET | /api/customers/:id/versions/:number | 快照全文 |
+| GET | /api/customers/:id/versions/:number/diff?with=head\|parent\|N | 与指定版本 diff |
+| POST | /api/customers/:id/versions/:number/restore | 应用快照到实时图 + 追加 restore 版本 |
+
+**前端**：画像右栏「版本时间线」；点开查看历史内容与与 HEAD 的 diff；「恢复到此版」。
+
 ### 版本与回退语义（三对象统一原则）
 
 历史永不删除；「回退」只是把系统认定的当前有效版本指向旧内容，或再追加一条内容等于旧版的新版本。

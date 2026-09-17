@@ -4,7 +4,7 @@ import { z } from 'zod';
 import neo4jDriver from 'neo4j-driver';
 import { withReadTx, withWriteTx } from '../neo4j.js';
 import { requireAuth } from '../auth.js';
-import { snapshotAfter } from '../services/snapshot.js';
+import { snapshotAfter } from '../services/snapshotAfter.js';
 
 export async function eventRoutes(app: FastifyInstance) {
   app.get('/', async (req, reply) => {

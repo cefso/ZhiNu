@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { withReadTx, withWriteTx } from '../neo4j.js';
 import { requireAuth } from '../auth.js';
-import { snapshotAfter } from '../services/snapshot.js';
+import { snapshotAfter } from '../services/snapshotAfter.js';
 
 const DIMENSIONS = z.enum([
   'profile',
