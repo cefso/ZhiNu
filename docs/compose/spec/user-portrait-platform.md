@@ -241,6 +241,28 @@ API 补充：
 
 `.env`：`PORT`、`SESSION_SECRET`、`NEO4J_*`、`LLM_*`、`ADMIN_*`。
 
+### 视觉（2026-09-17 重设计）
+
+原暖米色 `#f4f1ea` 观感偏旧，整站 token 重写为「夜空织线」冷调工作台：
+
+| Token | 值 | 用途 |
+|---|---|---|
+| `--bg` | `#F4F6FA` | 页面冷灰底 |
+| `--surface` | `#FFFFFF` | 卡片 |
+| `--ink` | `#141821` | 主文字 / 顶栏底 |
+| `--muted` | `#5C6478` | 次级文字 |
+| `--line` | `#DDE2EC` | 描边/分割 |
+| `--accent` | `#4F46E5` | 主按钮、链接、强调 |
+| `--accent-soft` | `#EEF0FF` | 强调底、hover 面 |
+| `--star` | `#8B7CFF` | 置顶星点 |
+| `--ok` / `--warn` / `--danger` | `#0F766E` / `#B45309` / `#B91C1C` | 状态徽章 |
+
+- 顶栏近夜空 `#141821`，品牌名带星点装饰
+- 七维分区左侧 3px 靛青竖线（织线意象）
+- 置顶洞察用 `--star` 点标记，不再用重色块
+- 全站焦点环 `outline: 2px solid var(--accent)`，禁用 `outline: none`
+- 字体：系统中文栈（PingFang SC / Noto Sans SC / system-ui）
+
 ## [S3] Out of Scope
 
 - 自动后台重算队列

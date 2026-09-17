@@ -28,7 +28,10 @@ function Shell({
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand">织女</div>
+        <div className="brand">
+          <span className="brand-star" aria-hidden />
+          织女
+        </div>
         <nav>
           <Link to="/">客户</Link>
           <Link to="/timeline">时间线</Link>
