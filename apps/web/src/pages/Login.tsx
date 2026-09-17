@@ -58,17 +58,17 @@ export default function LoginPage({ onLogin }: { onLogin: (me: Me) => void }) {
           </label>
         ) : null}
         <div className="row">
-          <button type="submit">{mode === 'login' ? '登录' : '注册'}</button>
+          <button type="submit" className="btn">{mode === 'login' ? '登录' : '注册'}</button>
           <button
             type="button"
-            className="ghost"
+            className="btn ghost"
             onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
           >
             {mode === 'login' ? '用邀请码注册' : '去登录'}
           </button>
           <button
             type="button"
-            className="ghost"
+            className="btn ghost"
             onClick={async () => {
               const r = await api<{ seededAdmin?: string }>('/api/auth/bootstrap', {
                 method: 'POST',

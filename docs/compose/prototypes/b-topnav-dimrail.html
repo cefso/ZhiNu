@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>原型 B · 顶栏 + 维度导航</title>
+<style>
+  :root {
+    --bg:#F4F6FA; --surface:#fff; --ink:#141821; --muted:#5C6478; --line:#DDE2EC;
+    --accent:#4F46E5; --accent-soft:#EEF0FF; --star:#8B7CFF; --topbar:#141821;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:"PingFang SC",system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  .topbar { background:var(--topbar); color:#E8EAF2; height:52px; display:flex; align-items:center; gap:1.25rem; padding:0 1.4rem; position:sticky; top:0; }
+  .brand { display:flex; align-items:center; gap:.4rem; font-weight:650; letter-spacing:.12em; }
+  .brand i { width:8px; height:8px; border-radius:50%; background:var(--star); box-shadow:0 0 10px var(--star); }
+  .topbar nav { display:flex; gap:.25rem; flex:1; }
+  .topbar a { color:rgba(232,234,242,.7); text-decoration:none; padding:.35rem .7rem; border-radius:8px; font-size:.9rem; }
+  .topbar a.on { background:rgba(255,255,255,.1); color:#fff; }
+  .wrap { max-width:1100px; margin:0 auto; padding:1.2rem 1.3rem 2.5rem; }
+  .head { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; }
+  .head h1 { font-size:1.35rem; font-weight:650; }
+  .head p { color:var(--muted); font-size:.88rem; }
+  .btn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:.45rem .9rem; font:inherit; font-weight:500; }
+  .btn.g { background:transparent; color:var(--ink); border:1px solid #C5CCD9; }
+  .layout { display:grid; grid-template-columns:200px 1fr; gap:1rem; align-items:start; }
+  .dims { position:sticky; top:68px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:.65rem; }
+  .dims a { display:block; text-decoration:none; color:var(--muted); padding:.55rem .65rem; border-radius:8px; font-size:.88rem; }
+  .dims a.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:1rem 1.1rem; margin-bottom:.8rem; }
+  .pin { border-left:3px solid var(--star); }
+  .dim { border-left:3px solid var(--accent); }
+  h2 { font-size:.95rem; font-weight:600; margin-bottom:.6rem; }
+  .item { border-top:1px solid var(--line); padding:.6rem 0; }
+  .item:first-of-type { border-top:0; padding-top:0; }
+  .item strong { font-size:.95rem; }
+  .item p { color:var(--muted); font-size:.86rem; margin-top:.2rem; }
+  .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-top:.55rem; }
+  .badge { font-size:.72rem; background:var(--accent-soft); color:var(--accent); padding:.1rem .45rem; border-radius:999px; }
+  .chips { display:flex; gap:.35rem; flex-wrap:wrap; }
+  .chip { font-size:.8rem; background:var(--accent-soft); color:#312E81; padding:.18rem .6rem; border-radius:999px; }
+  .ghostbtn { font-size:.8rem; border:1px solid #C5CCD9; background:#fff; border-radius:6px; padding:.28rem .55rem; color:var(--ink); }
+  .strip { display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; margin-bottom:1rem; }
+  .strip div { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:.75rem .9rem; }
+  .strip b { font-size:1.2rem; display:block; }
+  .strip span { color:var(--muted); font-size:.78rem; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><i></i>织女</div>
+  <nav><a class="on">客户</a><a>时间线</a><a>邀请码</a></nav>
+  <span style="font-size:.82rem;opacity:.55">admin@zhinu.local</span>
+</header>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>张总 <span style="font-weight:400;color:#5C6478;font-size:.95rem">· 示例科技</span></h1>
+      <p>画像为派生视图 · 洞察只增 · 备注可回退</p>
+    </div>
+    <div class="row" style="margin:0">
+      <button class="btn g">写洞察</button>
+      <button class="btn">LLM 重算</button>
+    </div>
+  </div>
+  <div class="strip">
+    <div><b>4</b><span>有效工作记录</span></div>
+    <div><b>3</b><span>业务系统</span></div>
+    <div><b>6</b><span>活跃洞察</span></div>
+    <div><b>1</b><span>待重算信号</span></div>
+  </div>
+  <div class="layout">
+    <nav class="dims">
+      <a class="on">置顶</a>
+      <a>基础与组织</a>
+      <a>业务目标</a>
+      <a>系统环境</a>
+      <a>服务历史</a>
+      <a>沟通偏好</a>
+      <a>风险情绪</a>
+      <a>开放备忘</a>
+    </nav>
+    <section>
+      <div class="card pin">
+        <h2>置顶洞察</h2>
+        <div class="item">
+          <strong>关注导出性能，排期敏感</strong>
+          <p>多次在月底前反馈导出超时，接受分批方案但要求明确窗口。</p>
+          <div class="row"><span class="badge">置顶</span><span style="color:#5C6478;font-size:.8rem">证据 3</span><button class="ghostbtn">取消置顶</button><button class="ghostbtn">作废</button></div>
+        </div>
+      </div>
+      <div class="card dim">
+        <h2>基础与组织关系</h2>
+        <div class="item">
+          <strong>信息部拍板人</strong>
+          <p>系统选型与窗口由本人确认，运维执行另有人对接。</p>
+          <div class="row"><span class="badge">llm</span><button class="ghostbtn">置顶</button><button class="ghostbtn">合并</button></div>
+        </div>
+      </div>
+      <div class="card dim">
+        <h2>系统与技术环境</h2>
+        <div class="chips" style="margin-bottom:.6rem"><span class="chip">CRM</span><span class="chip">ERP</span><span class="chip">OA</span></div>
+        <div class="item">
+          <strong>CRM 为主操作面</strong>
+          <p>导出与权限问题集中在 CRM。</p>
+        </div>
+        <div class="item" style="background:#F8F9FC;border-radius:10px;padding:.7rem;border-top:0;margin-top:.5rem">
+          <strong style="font-size:.88rem">备注 · CRM 3.2 发版</strong>
+          <p>下周四窗口，含导出优化。</p>
+          <button class="ghostbtn">版本历史</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

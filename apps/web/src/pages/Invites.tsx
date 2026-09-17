@@ -7,7 +7,7 @@ export default function InvitesPage() {
   const [error, setError] = useState('');
 
   return (
-    <div className="stack">
+    <div className="page-pad stack">
       <div className="page-head">
         <h1>邀请码</h1>
         <p className="muted">生成一次性邀请码，成员注册时填写</p>
@@ -33,7 +33,7 @@ export default function InvitesPage() {
             <option value="member">member</option>
             <option value="admin">admin</option>
           </select>
-          <button type="submit">生成邀请码</button>
+          <button type="submit" className="btn">生成邀请码</button>
         </form>
         {error ? <p className="error">{error}</p> : null}
         <ul className="insight-list">

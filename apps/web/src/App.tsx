@@ -1,4 +1,4 @@
-import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import LoginPage from './pages/Login';
@@ -16,6 +16,12 @@ export type Me = {
   };
 };
 
+const NAV = [
+  { to: '/', label: '客户画像', match: (p: string) => p === '/' || p.startsWith('/customers') },
+  { to: '/timeline', label: '工作时间线', match: (p: string) => p.startsWith('/timeline') },
+  { to: '/invites', label: '邀请码', match: (p: string) => p.startsWith('/invites'), adminOnly: true },
+];
+
 function Shell({
   children,
   me,
@@ -25,23 +31,30 @@ function Shell({
   me: Me | null;
   onLogout: () => void;
 }) {
+  const { pathname } = useLocation();
+  if (pathname === '/login') {
+    return <div className="shell login-shell">{children}</div>;
+  }
+
   return (
-    <div className="shell">
-      <header className="topbar">
-        <div className="brand">
+    <div className="app-shell">
+      <aside className="sidebar">
+        <Link to="/" className="logo">
           <span className="brand-star" aria-hidden />
           织女
-        </div>
-        <nav>
-          <Link to="/">客户</Link>
-          <Link to="/timeline">时间线</Link>
-          {me?.user.role === 'admin' ? <Link to="/invites">邀请码</Link> : null}
+        </Link>
+        <nav className="side-nav">
+          {NAV.filter((n) => !n.adminOnly || me?.user.role === 'admin').map((n) => (
+            <Link key={n.to} to={n.to} className={n.match(pathname) ? 'on' : undefined}>
+              {n.label}
+            </Link>
+          ))}
         </nav>
-        <div className="auth">
+        <div className="side-user">
           {me ? (
             <>
-              <span className="muted-on-dark">{me.user.email}</span>
-              <button type="button" className="ghost" onClick={onLogout}>
+              <span title={me.user.email}>{me.user.email}</span>
+              <button type="button" className="side-logout" onClick={onLogout}>
                 退出
               </button>
             </>
@@ -49,8 +62,8 @@ function Shell({
             <Link to="/login">登录</Link>
           )}
         </div>
-      </header>
-      <main>{children}</main>
+      </aside>
+      <div className="app-main">{children}</div>
     </div>
   );
 }

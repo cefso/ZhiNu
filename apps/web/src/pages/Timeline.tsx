@@ -48,7 +48,7 @@ export default function TimelinePage() {
   });
 
   return (
-    <div className="stack">
+    <div className="page-pad stack">
       <div className="page-head">
         <div>
           <h1>工作记录时间线</h1>
@@ -117,7 +117,7 @@ export default function TimelinePage() {
             value={form.systemNames}
             onChange={(e) => setForm({ ...form, systemNames: e.target.value })}
           />
-          <button type="submit">追加</button>
+          <button type="submit" className="btn">追加</button>
         </form>
       </div>
 

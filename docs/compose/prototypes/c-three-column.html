@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>原型 C · 三栏织网工作台</title>
+<style>
+  :root {
+    --bg:#F4F6FA; --surface:#fff; --ink:#141821; --muted:#5C6478; --line:#DDE2EC;
+    --accent:#4F46E5; --accent-soft:#EEF0FF; --star:#8B7CFF; --topbar:#141821;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:"PingFang SC",system-ui,sans-serif; background:var(--bg); color:var(--ink); height:100vh; overflow:hidden; }
+  .topbar { background:var(--topbar); color:#E8EAF2; height:52px; display:flex; align-items:center; gap:1rem; padding:0 1rem; }
+  .brand { display:flex; align-items:center; gap:.4rem; font-weight:650; letter-spacing:.12em; width:160px; }
+  .brand i { width:8px; height:8px; border-radius:50%; background:var(--star); box-shadow:0 0 10px var(--star); }
+  .topbar nav { display:flex; gap:.2rem; flex:1; }
+  .topbar a { color:rgba(232,234,242,.7); text-decoration:none; padding:.35rem .65rem; border-radius:8px; font-size:.88rem; }
+  .topbar a.on { background:rgba(255,255,255,.1); color:#fff; }
+  .grid { display:grid; grid-template-columns:240px 1fr 320px; height:calc(100vh - 52px); }
+  .col { overflow:auto; }
+  .col + .col { border-left:1px solid var(--line); }
+  .left { background:var(--surface); padding:.75rem; }
+  .search { width:100%; border:1px solid #C5CCD9; border-radius:8px; padding:.45rem .65rem; font:inherit; margin-bottom:.6rem; }
+  .cust { display:block; text-decoration:none; color:inherit; padding:.65rem .7rem; border-radius:10px; border:1px solid transparent; margin-bottom:.25rem; }
+  .cust:hover { background:var(--bg); }
+  .cust.on { background:var(--accent-soft); border-color:rgba(79,70,229,.25); }
+  .cust b { font-size:.92rem; }
+  .cust span { display:block; color:var(--muted); font-size:.78rem; margin-top:.15rem; }
+  .center { padding:1rem 1.15rem 2rem; }
+  .chead { display:flex; justify-content:space-between; align-items:center; margin-bottom:.85rem; position:sticky; top:0; background:var(--bg); padding:.2rem 0 .6rem; z-index:2; }
+  .chead h1 { font-size:1.2rem; font-weight:650; }
+  .btn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:.42rem .8rem; font:inherit; font-weight:500; font-size:.88rem; }
+  .btn.g { background:transparent; color:var(--ink); border:1px solid #C5CCD9; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:.9rem 1rem; margin-bottom:.65rem; }
+  .dim { border-left:3px solid var(--accent); }
+  .pin { border-left:3px solid var(--star); }
+  .card h2 { font-size:.86rem; font-weight:600; margin-bottom:.45rem; color:var(--muted); letter-spacing:.02em; }
+  .card strong { font-size:.95rem; }
+  .card p { color:var(--muted); font-size:.85rem; margin-top:.25rem; }
+  .right { background:var(--surface); padding:1rem .9rem 2rem; }
+  .right h2 { font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:.9rem 0 .5rem; }
+  .right h2:first-child { margin-top:0; }
+  .sys { border:1px solid var(--line); border-radius:10px; padding:.6rem .7rem; margin-bottom:.45rem; }
+  .sys b { font-size:.9rem; }
+  .sys p { font-size:.8rem; color:var(--muted); margin-top:.2rem; }
+  .tl { font-size:.84rem; border-left:2px solid var(--line); padding:.15rem 0 .15rem .7rem; margin-left:.3rem; margin-bottom:.7rem; color:var(--muted); }
+  .tl b { color:var(--ink); display:block; font-size:.88rem; font-weight:550; }
+  .pill { display:inline-block; font-size:.7rem; padding:.05rem .4rem; border-radius:999px; background:var(--accent-soft); color:var(--accent); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><i></i>织女</div>
+  <nav><a class="on">画像工作台</a><a>全局时间线</a><a>系统</a><a>邀请码</a></nav>
+  <span style="font-size:.82rem;opacity:.55">admin@zhinu.local</span>
+</header>
+<div class="grid">
+  <aside class="col left">
+    <input class="search" placeholder="搜索客户…" />
+    <a class="cust on"><b>张总</b><span>示例科技 · 系统 3 · 记录 4</span></a>
+    <a class="cust"><b>李经理</b><span>待补充 · 系统 0 · 记录 0</span></a>
+    <a class="cust"><b>王工</b><span>系统 1 · 记录 1</span></a>
+    <a class="cust"><b>客户A</b><span>记录 1</span></a>
+    <a class="cust"><b>客户B</b><span>记录 1</span></a>
+  </aside>
+  <section class="col center">
+    <div class="chead">
+      <div>
+        <h1>张总</h1>
+        <div style="color:#5C6478;font-size:.84rem">示例科技 · 七维画像</div>
+      </div>
+      <div style="display:flex;gap:.4rem">
+        <button class="btn g">写洞察</button>
+        <button class="btn">重算</button>
+      </div>
+    </div>
+    <div class="card pin">
+      <h2>置顶</h2>
+      <strong>关注导出性能，排期敏感</strong>
+      <p>月底前敏感，要求明确窗口。证据 3 条。</p>
+    </div>
+    <div class="card dim">
+      <h2>基础与组织关系</h2>
+      <strong>信息部拍板人</strong>
+      <p>选型与窗口本人确认。</p>
+    </div>
+    <div class="card dim">
+      <h2>业务背景与目标</h2>
+      <strong>主推数据中台对接</strong>
+      <p>CRM/ERP 打通，导出链路是卡点。</p>
+    </div>
+    <div class="card dim">
+      <h2>系统与技术环境</h2>
+      <strong>CRM 为主操作面</strong>
+      <p>问题集中在导出与权限。</p>
+    </div>
+    <div class="card dim">
+      <h2>沟通与性格偏好</h2>
+      <strong>要结论与时间点</strong>
+      <p>不要长篇过程描述。</p>
+    </div>
+  </section>
+  <aside class="col right">
+    <h2>业务系统</h2>
+    <div class="sys"><b>CRM <span class="pill">发版中</span></b><p>3.2 · 下周四窗口 · 导出优化</p></div>
+    <div class="sys"><b>ERP</b><p>对账只读接口</p></div>
+    <div class="sys"><b>OA</b><p>审批流曾超时</p></div>
+    <h2>联系人</h2>
+    <div class="sys"><b>张总 · 信息部主任</b><p>决策 / 窗口确认</p></div>
+    <h2>该客户时间线</h2>
+    <div class="tl"><b>CRM导出报错（更正）</b>09-16 · active</div>
+    <div class="tl"><b>CRM导出报错</b>09-16 · superseded</div>
+    <div class="tl"><b>OA审批慢</b>09-15 · active</div>
+  </aside>
+</div>
+</body>
+</html>

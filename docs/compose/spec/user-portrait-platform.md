@@ -264,6 +264,16 @@ API 补充：
 - 全站焦点环 `outline: 2px solid var(--accent)`，禁用 `outline: none`
 - 字体：系统中文栈（PingFang SC / Noto Sans SC / system-ui）
 
+### 布局（2026-09-17 修订 · 原型 A）
+
+采用「侧栏工作台」：
+
+- 左侧深色全高侧栏：品牌星点「织女」、主导航（客户画像 / 工作时间线 / 邀请码）、底部当前用户
+- 主区顶栏：当前客户名与操作（写洞察 / 写备注 / LLM 重算）
+- 主区双栏：左主区为置顶+七维洞察流；右栏 280px 为概览统计、联系人、备注卡、最近时间线
+- 全局时间线、邀请码仍为独立路由页，共用同一侧栏壳
+- 原型文件：`docs/compose/prototypes/a-sidebar-workbench.html`
+
 ## [S3] Out of Scope
 
 - 自动后台重算队列

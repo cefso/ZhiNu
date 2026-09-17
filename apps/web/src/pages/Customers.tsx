@@ -22,10 +22,12 @@ export default function CustomersPage() {
   const [busy, setBusy] = useState(false);
 
   return (
-    <div className="stack">
+    <div className="page-pad stack">
       <div className="page-head">
-        <h1>客户</h1>
-        <p className="muted">点开客户查看七维画像与洞察流</p>
+        <div>
+          <h1>客户</h1>
+          <p className="muted">点开客户进入侧栏工作台画像</p>
+        </div>
       </div>
 
       <div className="card">
@@ -61,7 +63,7 @@ export default function CustomersPage() {
             value={company}
             onChange={(e) => setCompany(e.target.value)}
           />
-          <button type="submit" disabled={busy}>
+          <button type="submit" className="btn" disabled={busy}>
             创建
           </button>
         </form>
