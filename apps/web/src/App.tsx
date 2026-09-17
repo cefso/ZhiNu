@@ -2,6 +2,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-r
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import LoginPage from './pages/Login';
+import OverviewPage from './pages/Overview';
 import CustomersPage from './pages/Customers';
 import PortraitPage from './pages/Portrait';
 import TimelinePage from './pages/Timeline';
@@ -17,9 +18,19 @@ export type Me = {
 };
 
 const NAV = [
-  { to: '/', label: '客户画像', match: (p: string) => p === '/' || p.startsWith('/customers') },
+  { to: '/', label: '总览', match: (p: string) => p === '/' },
+  {
+    to: '/customers',
+    label: '客户管理',
+    match: (p: string) => p === '/customers' || p.startsWith('/customers/'),
+  },
   { to: '/timeline', label: '工作时间线', match: (p: string) => p.startsWith('/timeline') },
-  { to: '/invites', label: '邀请码', match: (p: string) => p.startsWith('/invites'), adminOnly: true },
+  {
+    to: '/invites',
+    label: '邀请码',
+    match: (p: string) => p.startsWith('/invites'),
+    adminOnly: true,
+  },
 ];
 
 function Shell({
@@ -33,7 +44,7 @@ function Shell({
 }) {
   const { pathname } = useLocation();
   if (pathname === '/login') {
-    return <div className="shell login-shell">{children}</div>;
+    return <div className="login-root">{children}</div>;
   }
 
   return (
@@ -105,7 +116,11 @@ export default function App() {
             />
           }
         />
-        <Route path="/" element={me ? <CustomersPage /> : <Navigate to="/login" replace />} />
+        <Route path="/" element={me ? <OverviewPage /> : <Navigate to="/login" replace />} />
+        <Route
+          path="/customers"
+          element={me ? <CustomersPage /> : <Navigate to="/login" replace />}
+        />
         <Route
           path="/customers/:id"
           element={me ? <PortraitPage /> : <Navigate to="/login" replace />}

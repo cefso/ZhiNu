@@ -157,8 +157,8 @@ export default function PortraitPage() {
           </div>
         </div>
         <div className="row">
-          <Link to="/" className="btn ghost">
-            客户列表
+          <Link to="/customers" className="btn ghost">
+            客户管理
           </Link>
           <button type="button" className="btn ghost" onClick={() => setInsightOpen(true)}>
             写洞察
