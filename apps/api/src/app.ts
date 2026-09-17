@@ -10,6 +10,7 @@ import { eventRoutes } from './routes/events.js';
 import { insightRoutes, noteRoutes } from './routes/insights.js';
 import { statsRoutes } from './routes/stats.js';
 import { versionRoutes } from './routes/versions.js';
+import { settingsRoutes } from './routes/settings.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -34,6 +35,7 @@ export async function buildApp() {
   await app.register(inviteRoutes, { prefix: '/api/invites' });
   await app.register(statsRoutes, { prefix: '/api/stats' });
   await app.register(versionRoutes, { prefix: '/api' });
+  await app.register(settingsRoutes, { prefix: '/api' });
   await app.register(customerRoutes, { prefix: '/api/customers' });
   await app.register(eventRoutes, { prefix: '/api/events' });
   await app.register(insightRoutes, { prefix: '/api' });

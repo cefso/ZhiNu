@@ -131,6 +131,15 @@ v1 init → v2 insight/note → v3 llm → v4 edit → v5 restore
 
 **前端**：画像右栏「版本时间线」；点开查看历史内容与与 HEAD 的 diff；「恢复到此版」。
 
+### 设置页（LLM 运行时配置，2026-09-17）
+
+管理员可在侧栏「设置」配置 OpenAI 兼容 LLM，无需改 `.env` 重启：
+
+- 字段：`llmBaseUrl`、`llmModel`、`temperature`、`llmApiKey`（GET 返回掩码，不回传明文）
+- 存储：Neo4j `AppSettings { id: 'singleton' }`，优先于环境变量 `LLM_*`
+- API：`GET/PUT /api/settings`（写仅 admin）、`POST /api/settings/test-llm`（连通性探测）
+- 画像重算 `recomputeWithLlm` 读取运行时配置；无 Key 时 502 并提示到设置页
+
 ### 版本与回退语义（三对象统一原则）
 
 历史永不删除；「回退」只是把系统认定的当前有效版本指向旧内容，或再追加一条内容等于旧版的新版本。

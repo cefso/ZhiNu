@@ -1,4 +1,4 @@
-import { env } from './env.js';
+import { getAppSettings, type AppSettings } from './services/settings.js';
 
 export type LlmInsightDraft = {
   dimension: string;
@@ -75,17 +75,24 @@ ${input.events.map((e) => `id=${e.id} | ${e.occurredAt} | ${e.title}\n${e.conten
 - 不要输出 Markdown 代码块以外的内容`;
 }
 
-export async function recomputeWithLlm(input: LlmInput): Promise<LlmRecomputeResult> {
-  const url = `${env.LLM_BASE_URL.replace(/\/$/, '')}/chat/completions`;
+export async function recomputeWithLlm(
+  input: LlmInput,
+  config?: AppSettings,
+): Promise<LlmRecomputeResult> {
+  const cfg = config ?? (await getAppSettings());
+  if (!cfg.llmApiKey) {
+    throw new LlmError('未配置 LLM API Key（请在设置页配置）');
+  }
+  const url = `${cfg.llmBaseUrl.replace(/\/$/, '')}/chat/completions`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.LLM_API_KEY}`,
+      Authorization: `Bearer ${cfg.llmApiKey}`,
     },
     body: JSON.stringify({
-      model: env.LLM_MODEL,
-      temperature: 0.3,
+      model: cfg.llmModel,
+      temperature: cfg.temperature,
       response_format: { type: 'json_object' },
       messages: [
         {
