@@ -241,6 +241,100 @@ test('insight merge and unmerge', { skip }, async () => {
   assert.ok(restored.includes(idB));
 });
 
+test('invite not burned on duplicate email', { skip }, async () => {
+  const cookie = await loginAsAdmin(app);
+  const invite = await app.inject({
+    method: 'POST',
+    url: '/api/invites',
+    headers: { cookie },
+    payload: { role: 'member' },
+  });
+  assert.equal(invite.statusCode, 200, invite.body);
+  const code = invite.json().code as string;
+
+  // create existing user via second invite
+  const invite2 = await app.inject({
+    method: 'POST',
+    url: '/api/invites',
+    headers: { cookie },
+    payload: { role: 'member' },
+  });
+  const code2 = invite2.json().code as string;
+  const email = `dup-${Date.now()}@example.com`;
+  const reg1 = await app.inject({
+    method: 'POST',
+    url: '/api/auth/register',
+    payload: { email, password: 'password1', inviteCode: code2 },
+  });
+  assert.equal(reg1.statusCode, 200, reg1.body);
+
+  const reg2 = await app.inject({
+    method: 'POST',
+    url: '/api/auth/register',
+    payload: { email, password: 'password2', inviteCode: code },
+  });
+  assert.equal(reg2.statusCode, 409, reg2.body);
+
+  // original invite should still work for a new email
+  const reg3 = await app.inject({
+    method: 'POST',
+    url: '/api/auth/register',
+    payload: { email: `ok-${Date.now()}@example.com`, password: 'password3', inviteCode: code },
+  });
+  assert.equal(reg3.statusCode, 200, reg3.body);
+});
+
+test('rollback rejects cross-customer version event', { skip }, async () => {
+  const cookie = await loginAsAdmin(app);
+  const a = await app.inject({
+    method: 'POST',
+    url: '/api/customers',
+    headers: { cookie },
+    payload: { name: '客户A' },
+  });
+  const b = await app.inject({
+    method: 'POST',
+    url: '/api/customers',
+    headers: { cookie },
+    payload: { name: '客户B' },
+  });
+  const idA = a.json().customer.id as string;
+  const idB = b.json().customer.id as string;
+
+  const evA = await app.inject({
+    method: 'POST',
+    url: '/api/events',
+    headers: { cookie },
+    payload: {
+      customerId: idA,
+      title: 'A事件',
+      content: 'A内容',
+      occurredAt: '2026-09-01T08:00:00Z',
+    },
+  });
+  const evB = await app.inject({
+    method: 'POST',
+    url: '/api/events',
+    headers: { cookie },
+    payload: {
+      customerId: idB,
+      title: 'B事件',
+      content: 'B内容',
+      occurredAt: '2026-09-01T09:00:00Z',
+    },
+  });
+  const evAId = evA.json().event.id as string;
+  const evBId = evB.json().event.id as string;
+
+  const bad = await app.inject({
+    method: 'POST',
+    url: `/api/events/${evAId}/rollback`,
+    headers: { cookie },
+    payload: { versionEventId: evBId },
+  });
+  assert.equal(bad.statusCode, 400, bad.body);
+});
+
 test('recompute with stub LLM is append-only', { skip }, async () => {
   const cookie = await loginAsAdmin(app);
   const created = await app.inject({

@@ -90,11 +90,9 @@ export async function customerRoutes(app: FastifyInstance) {
         `MATCH (c:Customer {id: $id})
          OPTIONAL MATCH (c)-[:HAS_SYSTEM]->(s:System)
          OPTIONAL MATCH (c)-[:HAS_CONTACT]->(ct:Contact)
-         OPTIONAL MATCH (p:Portrait {customerId: $id})
          RETURN c.id AS id, c.name AS name, c.company AS company,
                 collect(DISTINCT s { .id, .name }) AS systems,
-                collect(DISTINCT ct { .id, .name, .title }) AS contacts,
-                p.lastRecomputedAt AS lastRecomputedAt`,
+                collect(DISTINCT ct { .id, .name, .title }) AS contacts`,
         { id },
       );
       const cRec = customerRes.records[0];
@@ -126,6 +124,20 @@ export async function customerRoutes(app: FastifyInstance) {
         { id },
       );
 
+      const historyRes = await tx.run(
+        `MATCH (i:Insight {customerId: $id}) WHERE i.status IN ['merged','retired']
+         OPTIONAL MATCH (i)-[:SUPPORTED_BY]->(e:Event)
+         WITH i, collect(DISTINCT e.id) AS eventIds
+         ORDER BY i.createdAt DESC
+         RETURN i {
+           .id, .customerId, .dimension, .title, .body, .source, .status, .pinned,
+           .createdAt, .createdBy,
+           eventIds: eventIds
+         } AS insight
+         LIMIT 50`,
+        { id },
+      );
+
       const notesRes = await tx.run(
         `MATCH (n:Note {customerId: $id})
          OPTIONAL MATCH (n)-[:ON]->(target)
@@ -140,6 +152,7 @@ export async function customerRoutes(app: FastifyInstance) {
       );
 
       const insights = activeRes.records.map((r) => normalizeInsight(r.get('insight')));
+      const history = historyRes.records.map((r) => normalizeInsight(r.get('insight')));
       const pinnedIds = new Set(
         pinnedRes.records.map((r) => (r.get('insight') as { id: string }).id),
       );
@@ -166,6 +179,16 @@ export async function customerRoutes(app: FastifyInstance) {
         { id },
       );
       const eventCount = Number(activeEvents.records[0]?.get('c') ?? 0);
+      const portraitRes = await tx.run(
+        `MATCH (p:Portrait {customerId: $id})
+         RETURN p.lastEventCount AS lastEventCount, p.lastRecomputedAt AS lastRecomputedAt`,
+        { id },
+      );
+      const lastEventCount = Number(portraitRes.records[0]?.get('lastEventCount') ?? -1);
+      const lastRecomputedAt =
+        (portraitRes.records[0]?.get('lastRecomputedAt') as string | null) ?? undefined;
+      const needsRecompute =
+        lastEventCount < 0 ? eventCount > 0 : eventCount !== lastEventCount;
 
       return {
         customer: {
@@ -177,8 +200,9 @@ export async function customerRoutes(app: FastifyInstance) {
         contacts: (cRec.get('contacts') as any[]).filter((c) => c?.id),
         pinned: insights.filter((i) => pinnedIds.has(i.id)),
         buckets,
-        lastRecomputedAt: (cRec.get('lastRecomputedAt') as string | null) ?? undefined,
-        needsRecompute: eventCount > 0,
+        history,
+        lastRecomputedAt,
+        needsRecompute,
       };
     });
 
@@ -194,39 +218,51 @@ export async function customerRoutes(app: FastifyInstance) {
       const result = await tx.run(
         `
         MATCH (c:Customer {id: $id})
-        OPTIONAL MATCH (c)-[r1:HAS_SYSTEM]->(s:System)
-        OPTIONAL MATCH (c)-[r2:HAS_CONTACT]->(ct:Contact)
-        OPTIONAL MATCH (c)<-[r3:ABOUT]-(e:Event {status: 'active'})
-        OPTIONAL MATCH (c)<-[r4:ABOUT]-(i:Insight {status: 'active'})
-        RETURN s, ct, e, i
-        LIMIT 200
+        CALL {
+          WITH c
+          OPTIONAL MATCH (c)-[:HAS_SYSTEM]->(s:System)
+          RETURN collect(DISTINCT s {.id, .name}) AS systems
+        }
+        CALL {
+          WITH c
+          OPTIONAL MATCH (c)-[:HAS_CONTACT]->(ct:Contact)
+          RETURN collect(DISTINCT ct {.id, .name, .title}) AS contacts
+        }
+        CALL {
+          WITH c
+          OPTIONAL MATCH (c)<-[:ABOUT]-(e:Event {status: 'active'})
+          RETURN collect(DISTINCT e {.id, .title}) AS events
+        }
+        CALL {
+          WITH c
+          OPTIONAL MATCH (c)<-[:ABOUT]-(i:Insight {status: 'active'})
+          RETURN collect(DISTINCT i {.id, .title}) AS insights
+        }
+        RETURN systems, contacts, events, insights
         `,
         { id },
       );
+      const rec = result.records[0];
       const items: {
         kind: 'system' | 'contact' | 'event' | 'insight';
         id: string;
         label: string;
         relation: string;
       }[] = [];
-      for (const rec of result.records) {
-        const s = rec.get('s') as { id: string; name: string } | null;
+      if (!rec) return items;
+      for (const s of rec.get('systems') as { id: string; name: string }[]) {
         if (s?.id) items.push({ kind: 'system', id: s.id, label: s.name, relation: 'HAS_SYSTEM' });
-        const ct = rec.get('ct') as { id: string; name: string } | null;
+      }
+      for (const ct of rec.get('contacts') as { id: string; name: string }[]) {
         if (ct?.id) items.push({ kind: 'contact', id: ct.id, label: ct.name, relation: 'HAS_CONTACT' });
-        const e = rec.get('e') as { id: string; title: string } | null;
+      }
+      for (const e of rec.get('events') as { id: string; title: string }[]) {
         if (e?.id) items.push({ kind: 'event', id: e.id, label: e.title, relation: 'ABOUT' });
-        const i = rec.get('i') as { id: string; title: string } | null;
+      }
+      for (const i of rec.get('insights') as { id: string; title: string }[]) {
         if (i?.id) items.push({ kind: 'insight', id: i.id, label: i.title, relation: 'ABOUT' });
       }
-      // dedupe
-      const seen = new Set<string>();
-      return items.filter((it) => {
-        const k = `${it.kind}:${it.id}`;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
+      return items;
     });
     return { neighbors };
   });

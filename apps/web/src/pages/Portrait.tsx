@@ -38,6 +38,7 @@ type PortraitDetail = {
     contacts: { id: string; name: string; title?: string }[];
     notes: Note[];
   }[];
+  history?: Insight[];
   lastRecomputedAt?: string;
   needsRecompute?: boolean;
 };
@@ -93,6 +94,28 @@ export default function PortraitPage() {
   async function retire(insightId: string) {
     if (!confirm('作废这条洞察？')) return;
     await api(`/api/insights/${insightId}/retire`, { method: 'POST' });
+    reload();
+  }
+
+  async function unmerge(insightId: string) {
+    await api(`/api/insights/${insightId}/unmerge`, { method: 'POST' });
+    reload();
+  }
+
+  async function showVersions(note: Note) {
+    const res = await api<{ currentVersion: number; versions: { version: number; title: string; body: string }[] }>(
+      `/api/notes/${note.id}/versions`,
+    );
+    const lines = res.versions
+      .map((v) => `v${v.version}${v.version === res.currentVersion ? '（当前）' : ''}: ${v.title}\n${v.body}`)
+      .join('\n\n');
+    const pick = prompt(`选择要回退到的版本号（1–${res.versions.length}）\n\n${lines}`, String(res.currentVersion));
+    const version = Number(pick);
+    if (!pick || Number.isNaN(version)) return;
+    await api(`/api/notes/${note.id}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ version }),
+    });
     reload();
   }
 
@@ -209,19 +232,8 @@ export default function PortraitPage() {
                       >
                         编辑（新版本）
                       </button>
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={async () => {
-                          if (n.currentVersion <= 1) return;
-                          await api(`/api/notes/${n.id}/rollback`, {
-                            method: 'POST',
-                            body: JSON.stringify({ version: n.currentVersion - 1 }),
-                          });
-                          reload();
-                        }}
-                      >
-                        回退上一版
+                      <button type="button" className="ghost" onClick={() => showVersions(n)}>
+                        版本历史 / 回退
                       </button>
                     </div>
                   </article>
@@ -248,6 +260,9 @@ export default function PortraitPage() {
                     {i.pinned ? <span className="badge pin">置顶</span> : null}
                   </div>
                   <p>{i.body}</p>
+                  {i.eventIds?.length ? (
+                    <p className="muted small">证据 {i.eventIds.length} 条工作记录</p>
+                  ) : null}
                   <div className="row">
                     <button
                       type="button"
@@ -256,6 +271,15 @@ export default function PortraitPage() {
                     >
                       {i.pinned ? '取消置顶' : '置顶'}
                     </button>
+                    {i.source === 'human' || i.status === 'active' ? (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => unmerge(i.id)}
+                      >
+                        撤销合并
+                      </button>
+                    ) : null}
                     <button type="button" className="ghost" onClick={() => retire(i.id)}>
                       作废
                     </button>
@@ -269,6 +293,23 @@ export default function PortraitPage() {
           </section>
         );
       })}
+
+      <section className="card">
+        <h2>历史洞察（已合并 / 已作废）</h2>
+        <details>
+          <summary className="muted">展开查看（默认折叠）</summary>
+          <ul className="insight-list">
+            {(p.history ?? []).map((i) => (
+              <li key={i.id}>
+                <strong>{i.title}</strong>{' '}
+                <span className="badge">{i.status}</span>
+                <p className="muted">{i.body}</p>
+              </li>
+            ))}
+            {(p.history ?? []).length === 0 ? <li className="muted">暂无历史</li> : null}
+          </ul>
+        </details>
+      </section>
 
       <section className="card">
         <h2>图邻居（一跳）</h2>

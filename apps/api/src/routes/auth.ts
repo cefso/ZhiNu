@@ -50,7 +50,6 @@ export async function authRoutes(app: FastifyInstance) {
       const user = await withWriteTx(async (tx) => {
         const invite = await tx.run(
           `MATCH (i:Invite {code: $code, used: false})
-           SET i.used = true
            RETURN i.role AS role`,
           { code: inviteCode },
         );
@@ -59,6 +58,14 @@ export async function authRoutes(app: FastifyInstance) {
 
         const dup = await tx.run(`MATCH (u:User {email: $email}) RETURN u LIMIT 1`, { email });
         if (dup.records.length > 0) return { conflict: true as const };
+
+        const consumed = await tx.run(
+          `MATCH (i:Invite {code: $code, used: false})
+           SET i.used = true
+           RETURN i.role AS role`,
+          { code: inviteCode },
+        );
+        if (consumed.records.length === 0) return null;
 
         const id = randomUUID();
         const hash = await bcrypt.hash(password, 10);

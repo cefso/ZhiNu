@@ -40,7 +40,12 @@ export default function TimelinePage() {
     systemNames: '',
   });
   const [supersedeFor, setSupersedeFor] = useState<WorkEvent | null>(null);
-  const [supersedeBody, setSupersedeBody] = useState({ title: '', content: '' });
+  const [supersedeBody, setSupersedeBody] = useState({
+    title: '',
+    content: '',
+    occurredAt: '',
+    systemNames: '',
+  });
 
   return (
     <div className="stack">
@@ -162,7 +167,12 @@ export default function TimelinePage() {
                   className="ghost"
                   onClick={() => {
                     setSupersedeFor(ev);
-                    setSupersedeBody({ title: ev.title, content: ev.content });
+                    setSupersedeBody({
+                      title: ev.title,
+                      content: ev.content,
+                      occurredAt: String(ev.occurredAt).slice(0, 16),
+                      systemNames: (ev.systemNames ?? []).join(','),
+                    });
                   }}
                 >
                   修正
@@ -214,8 +224,13 @@ export default function TimelinePage() {
                   body: JSON.stringify({
                     title: supersedeBody.title,
                     content: supersedeBody.content,
-                    occurredAt: new Date().toISOString(),
-                    systemNames: supersedeFor.systemNames ?? [],
+                    occurredAt: supersedeBody.occurredAt
+                      ? new Date(supersedeBody.occurredAt).toISOString()
+                      : new Date().toISOString(),
+                    systemNames: supersedeBody.systemNames
+                      .split(/[,，\s]+/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
                   }),
                 });
                 setSupersedeFor(null);
@@ -231,6 +246,20 @@ export default function TimelinePage() {
                 value={supersedeBody.content}
                 onChange={(e) => setSupersedeBody({ ...supersedeBody, content: e.target.value })}
                 required
+              />
+              <input
+                type="datetime-local"
+                value={supersedeBody.occurredAt}
+                onChange={(e) =>
+                  setSupersedeBody({ ...supersedeBody, occurredAt: e.target.value })
+                }
+              />
+              <input
+                placeholder="系统标签，逗号分隔"
+                value={supersedeBody.systemNames}
+                onChange={(e) =>
+                  setSupersedeBody({ ...supersedeBody, systemNames: e.target.value })
+                }
               />
               <div className="row">
                 <button type="submit">生成新版本</button>

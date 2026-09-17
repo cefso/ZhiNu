@@ -152,6 +152,7 @@ export async function eventRoutes(app: FastifyInstance) {
       );
       const oldRec = old.records[0];
       if (!oldRec) return { notFound: true as const };
+      if (oldRec.get('status') !== 'active') return { notActive: true as const };
       const customerId = oldRec.get('customerId') as string;
 
       await tx.run(
@@ -201,6 +202,9 @@ export async function eventRoutes(app: FastifyInstance) {
     });
 
     if ('notFound' in result) return reply.code(404).send({ error: 'Event not found' });
+    if ('notActive' in result) {
+      return reply.code(400).send({ error: 'Only active events can be superseded' });
+    }
     return { event: { id: newId, supersedes: id, ...parsed.data }, needsRecompute: true };
   });
 
@@ -247,6 +251,8 @@ export async function eventRoutes(app: FastifyInstance) {
       if (!vRec) return { versionNotFound: true as const };
 
       const customerId = currentRec.get('customerId') as string;
+      const versionCustomerId = vRec.get('customerId') as string;
+      if (versionCustomerId !== customerId) return { crossCustomer: true as const };
       const title = vRec.get('title') as string;
       const content = vRec.get('content') as string;
       const occurredAt = vRec.get('occurredAt') as string;
@@ -292,6 +298,9 @@ export async function eventRoutes(app: FastifyInstance) {
     }
     if ('versionNotFound' in result) {
       return reply.code(404).send({ error: 'Version event not found' });
+    }
+    if ('crossCustomer' in result) {
+      return reply.code(400).send({ error: 'Version event belongs to another customer' });
     }
     return {
       event: { id: newId, supersedes: id, restoredFrom: parsed.data.versionEventId },

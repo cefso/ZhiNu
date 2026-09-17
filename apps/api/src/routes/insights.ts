@@ -64,9 +64,9 @@ export async function insightRoutes(app: FastifyInstance) {
 
       for (const eventId of parsed.data.eventIds) {
         await tx.run(
-          `MATCH (i:Insight {id: $insightId}), (e:Event {id: $eventId})
+          `MATCH (i:Insight {id: $insightId}), (e:Event {id: $eventId, customerId: $customerId})
            MERGE (i)-[:SUPPORTED_BY]->(e)`,
-          { insightId: id, eventId },
+          { insightId: id, eventId, customerId },
         );
       }
       for (const name of parsed.data.mentionSystems) {
@@ -117,23 +117,23 @@ export async function insightRoutes(app: FastifyInstance) {
 
     const newId = randomUUID();
     const result = await withWriteTx(async (tx) => {
-      const sources = await tx.run(
-        `MATCH (i:Insight) WHERE i.id IN $ids AND i.status = 'active'
-         RETURN i.id AS id, i.customerId AS customerId, i.dimension AS dimension
-         LIMIT 1`,
-        { ids: parsed.data.sourceInsightIds },
-      );
-      if (sources.records.length === 0) return { notFound: true as const };
-      // ensure all source ids exist and share customer
       const all = await tx.run(
         `MATCH (i:Insight) WHERE i.id IN $ids
-         RETURN collect(DISTINCT i.customerId) AS customers, collect(i.id) AS found`,
+         RETURN collect(DISTINCT i.customerId) AS customers,
+                collect(i.id) AS found,
+                collect(CASE WHEN i.status = 'active' THEN i.id ELSE null END) AS activeIds`,
         { ids: parsed.data.sourceInsightIds },
       );
       const customers = (all.records[0]?.get('customers') as string[]).filter(Boolean);
       const found = (all.records[0]?.get('found') as string[]) ?? [];
+      const activeIds = (all.records[0]?.get('activeIds') as (string | null)[]).filter(
+        Boolean,
+      ) as string[];
       if (found.length !== parsed.data.sourceInsightIds.length || customers.length !== 1) {
         return { invalid: true as const };
+      }
+      if (activeIds.length !== parsed.data.sourceInsightIds.length) {
+        return { notActive: true as const };
       }
       const customerId = customers[0];
 
@@ -182,6 +182,9 @@ export async function insightRoutes(app: FastifyInstance) {
     if ('notFound' in result) return reply.code(404).send({ error: 'No active source insight' });
     if ('invalid' in result) {
       return reply.code(400).send({ error: 'Source insights must share one customer' });
+    }
+    if ('notActive' in result) {
+      return reply.code(400).send({ error: 'All source insights must be active' });
     }
     return {
       insight: { id: newId, ...parsed.data, source: 'human', status: 'active' },
