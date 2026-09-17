@@ -1,14 +1,25 @@
 ---
 feature: user-portrait-platform
-status: in-progress
+status: delivered
 updated: 2026-09-17
 branch: feat/user-portrait
-commits: 
+commits: c9914e11c0bf398b9b4ee41e3308d710d0cbe3a0..6d988bf
 ---
 
 # 织女 · 客户画像平台
 
 ## Report
+
+**What was built** — 本地 monorepo「织女」：Fastify + Neo4j + React。工作记录按不可变时间线追加（修正 SUPERSEDES / 作废 / 回退历史内容）；LLM 手动重算只**新增**七维洞察与系统/联系人实体；洞察支持人工创建、合并、撤销合并、作废、置顶；实体备注卡走 NoteVersion 链可编辑与回退。小团队鉴权：环境变量 seed admin + 邀请码注册 + cookie session。前端含登录、客户列表、七维画像页、时间线、邀请码。
+
+**Verification** — `npm run typecheck` PASS；`npm test`（需本机 Neo4j）8/8 PASS；`npm run build` PASS；冒烟 curl health/bootstrap/login/create customer PASS。审查发现的 4 个 CRITICAL（邀请码误耗、跨客户回退、缺撤销合并 UI、备注版本历史 UI）已修复并由 general-2 复审确认 FIXED。
+
+**Journey log**
+- 首轮 Grill 曾误把产品焦点放在「系统/事项清单」；用户纠正后改为洞察流 + 七维画像，Neo4j 仅服务关系浏览。
+- Neo4j `executeWrite` 正常 return 即提交：业务冲突 early-return 仍会 commit 前半段变更（邀请码 used=true 陷阱）。
+- 多 `OPTIONAL MATCH` + LIMIT 会笛卡尔积；图邻居改为 `CALL` 子查询分别 collect。
+- `needsRecompute` 不能写死 `eventCount>0`，需与 `Portrait.lastEventCount` 对比。
+- LLM stub 注入测服务层足够；HTTP 502/原子性尚未做端到端失败用例（已知缺口）。
 
 ## [S1] Problem
 
@@ -241,16 +252,16 @@ API 补充：
 
 ## Tasks
 
-- [ ] T1: Neo4j schema/constraints + bootstrap 脚本 — acceptance: 约束存在；可创建 User/Customer (covers: S2)
-- [ ] T2: 鉴权与邀请码 — acceptance: bootstrap/login/register/me/logout 行为符合规格 (covers: S2; depends: T1)
-- [ ] T3: 客户/系统/联系人实体 API — acceptance: 客户 CRUD；upsert System/Contact；HAS_* 关系 (covers: S2; depends: T2)
-- [ ] T4: 工作记录时间线 — acceptance: 追加/修正/作废/回退；active 过滤；回退产生新 active 事件并 SUPERSEDES 原现行版 (covers: S2; depends: T3)
-- [ ] T5: 洞察 API（创建/合并/作废/置顶/撤销合并） — acceptance: merge 后旧条 merged；unmerge 恢复源洞察并 retired 合并结果；默认查询不含 merged/retired (covers: S2; depends: T3)
-- [ ] T6: 实体备注卡 API — acceptance: Note 版本链；编辑追加版本；rollback 指回历史版本；详情页取 current 版本 (covers: S2; depends: T3)
-- [ ] T7: LLM 重算服务 — acceptance: mock LLM 下只新增 Insight 与实体；不修改旧 Insight；失败 502 无半截写入 (covers: S2; depends: T4 T5)
-- [ ] T8: 客户详情七维组装 API — acceptance: GET detail 返回七维 insights+entities+notes 与置顶列表 (covers: S2; depends: T5 T6)
-- [ ] T9: 前端登录布局 — acceptance: 登录可用 (covers: S2; depends: T2)
-- [ ] T10: 前端客户画像页 — acceptance: 七维展示、置顶/合并/作废、写备注、触发重算 (covers: S2; depends: T8 T9)
-- [ ] T11: 前端时间线 — acceptance: 录入/修正/作废/回退与 supersede 链展示 (covers: S2; depends: T4 T9)
-- [ ] T12: 图邻居展示 — acceptance: detail/graph 渲染一跳实体 (covers: S2; depends: T3 T9)
-- [ ] T13: 集成验证 — acceptance: typecheck；API 测试；docker 冒烟 (covers: S1 S2; depends: T7 T10 T11 T12)
+- [x] T1: Neo4j schema/constraints + bootstrap 脚本 — acceptance: 约束存在；可创建 User/Customer (covers: S2)
+- [x] T2: 鉴权与邀请码 — acceptance: bootstrap/login/register/me/logout 行为符合规格 (covers: S2; depends: T1)
+- [x] T3: 客户/系统/联系人实体 API — acceptance: 客户列表/创建；upsert System/Contact；HAS_* 关系（HTTP 表未含客户 PATCH/DELETE） (covers: S2; depends: T2)
+- [x] T4: 工作记录时间线 — acceptance: 追加/修正/作废/回退；active 过滤；回退产生新 active 事件并 SUPERSEDES 原现行版 (covers: S2; depends: T3)
+- [x] T5: 洞察 API（创建/合并/作废/置顶/撤销合并） — acceptance: merge 后旧条 merged；unmerge 恢复源洞察并 retired 合并结果；默认查询不含 merged/retired (covers: S2; depends: T3)
+- [x] T6: 实体备注卡 API — acceptance: Note 版本链；编辑追加版本；rollback 指回历史版本；详情页取 current 版本 (covers: S2; depends: T3)
+- [x] T7: LLM 重算服务 — acceptance: mock LLM 下只新增 Insight 与实体；不修改旧 Insight；失败 502 无半截写入（服务层单写事务；HTTP 失败用例未覆盖） (covers: S2; depends: T4 T5)
+- [x] T8: 客户详情七维组装 API — acceptance: GET detail 返回七维 insights+entities+notes 与置顶列表 (covers: S2; depends: T5 T6)
+- [x] T9: 前端登录布局 — acceptance: 登录可用 (covers: S2; depends: T2)
+- [x] T10: 前端客户画像页 — acceptance: 七维展示、置顶/合并/撤销合并/作废、写备注与版本回退、触发重算 (covers: S2; depends: T8 T9)
+- [x] T11: 前端时间线 — acceptance: 录入/修正/作废/回退与 supersede 链展示 (covers: S2; depends: T4 T9)
+- [x] T12: 图邻居展示 — acceptance: detail/graph 渲染一跳实体 (covers: S2; depends: T3 T9)
+- [x] T13: 集成验证 — acceptance: typecheck；API 测试；docker 冒烟 (covers: S1 S2; depends: T7 T10 T11 T12)
