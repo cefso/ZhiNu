@@ -3,7 +3,7 @@ feature: user-portrait-platform
 status: delivered
 updated: 2026-09-17
 branch: feat/user-portrait
-commits: c9914e11c0bf398b9b4ee41e3308d710d0cbe3a0..6d988bf
+commits: c9914e11c0bf398b9b4ee41e3308d710d0cbe3a0..8197369
 ---
 
 # 织女 · 客户画像平台
@@ -20,6 +20,7 @@ commits: c9914e11c0bf398b9b4ee41e3308d710d0cbe3a0..6d988bf
 - 多 `OPTIONAL MATCH` + LIMIT 会笛卡尔积；图邻居改为 `CALL` 子查询分别 collect。
 - `needsRecompute` 不能写死 `eventCount>0`，需与 `Portrait.lastEventCount` 对比。
 - LLM stub 注入测服务层足够；HTTP 502/原子性尚未做端到端失败用例（已知缺口）。
+- 暖米色纸感是 AI UI 默认簇之一，内部工具更宜冷灰底 + 单一靛青强调；品牌用星点/织线做轻签名即可。
 
 ## [S1] Problem
 
