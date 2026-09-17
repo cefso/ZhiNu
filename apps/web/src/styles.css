@@ -1,0 +1,337 @@
+:root {
+  color-scheme: light;
+  font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: #f4f1ea;
+  color: #1c1b19;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  min-height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.85rem 1.4rem;
+  background: #1c1b19;
+  color: #f4f1ea;
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+}
+
+.topbar a {
+  color: #f4f1ea;
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+.topbar a:hover {
+  opacity: 1;
+}
+
+.auth {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.muted-on-dark {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1.4rem;
+}
+
+.page-loading {
+  padding: 3rem;
+  text-align: center;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+h1 {
+  margin: 0.2rem 0;
+  font-size: 1.45rem;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.card {
+  background: #fffdf8;
+  border: 1px solid #d9d2c5;
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+}
+
+.card.narrow {
+  max-width: 420px;
+  margin: 2.5rem auto;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.list-item {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.list-item:hover {
+  border-color: #1c1b19;
+}
+
+.inline-form,
+.row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.row.space-between {
+  justify-content: space-between;
+}
+
+.stack-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.65rem;
+  font-size: 0.92rem;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #c9c0b0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.row > input,
+.row > select,
+.row > button {
+  width: auto;
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+button {
+  font: inherit;
+  padding: 0.5rem 0.95rem;
+  border-radius: 8px;
+  border: 1px solid #1c1b19;
+  background: #1c1b19;
+  color: #f4f1ea;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: transparent;
+  color: #1c1b19;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.muted {
+  color: #6b655c;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.error {
+  color: #a33;
+}
+
+.insight-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.insight-list li {
+  border-top: 1px solid #ebe4d7;
+  padding-top: 0.75rem;
+}
+
+.insight-list li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.insight-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.insight-head label {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0;
+}
+
+.insight-head input[type='checkbox'] {
+  width: auto;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #ebe4d7;
+}
+
+.badge.pin {
+  background: #1c1b19;
+  color: #f4f1ea;
+}
+
+.badge.status-active {
+  background: #dcead8;
+}
+
+.badge.status-superseded {
+  background: #f0e0c8;
+}
+
+.badge.status-voided {
+  background: #ead8d8;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.chip {
+  background: #efe8db;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.dim-section {
+  scroll-margin-top: 1rem;
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0.6rem 0;
+}
+
+.note-card {
+  border: 1px dashed #c9c0b0;
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  background: #faf6ee;
+}
+
+.note-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.note-card p {
+  margin: 0.4rem 0 0.55rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 27, 25, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 20;
+}
+
+.modal {
+  width: min(520px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.sticky-merge {
+  position: sticky;
+  bottom: 0.75rem;
+  box-shadow: 0 8px 24px rgba(28, 27, 25, 0.12);
+}
+
+.pinned-block {
+  border-color: #1c1b19;
+}
+
+.event-card p {
+  margin: 0.5rem 0;
+}
