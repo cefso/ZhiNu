@@ -431,7 +431,7 @@ export async function eventRoutes(app: FastifyInstance) {
       if (currentRec.get('status') !== 'active') return { notActive: true as const };
 
       const version = await tx.run(
-        `MATCH (v:Event {id: $versionId}) RETURN v.title AS title, v.content AS content, v.occurredAt AS occurredAt, v.tags AS tags, v.customerId AS customerId, v.domain AS domain, v.serviceType AS serviceType, v.techs AS techs`,
+        `MATCH (v:Event {id: $versionId}) RETURN v.title AS title, v.content AS content, v.occurredAt AS occurredAt, v.tags AS tags, v.customerId AS customerId, v.domain AS domain, v.serviceType AS serviceType, v.techs AS techs, v.classifySource AS classifySource`,
         { versionId: parsed.data.versionEventId },
       );
       const vRec = version.records[0];
@@ -447,6 +447,7 @@ export async function eventRoutes(app: FastifyInstance) {
       const domain = (vRec.get('domain') as string | null) ?? null;
       const serviceType = (vRec.get('serviceType') as string | null) ?? null;
       const techs = (vRec.get('techs') as string[] | null) ?? [];
+      const classifySource = (vRec.get('classifySource') as string | null) ?? null;
 
       await tx.run(
         `MATCH (old:Event {id: $id})
@@ -463,7 +464,7 @@ export async function eventRoutes(app: FastifyInstance) {
            serviceType: $serviceType,
            techs: $techs,
            classifiedAt: datetime(),
-           classifySource: CASE WHEN $domain IS NULL THEN NULL ELSE 'human' END,
+           classifySource: $classifySource,
            createdAt: datetime(),
            createdBy: $createdBy,
            rollbackFrom: $versionId
@@ -482,6 +483,7 @@ export async function eventRoutes(app: FastifyInstance) {
           domain,
           serviceType,
           techs,
+          classifySource,
           createdBy: auth.userId,
           versionId: parsed.data.versionEventId,
         },

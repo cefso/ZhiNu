@@ -1,14 +1,29 @@
 ---
 feature: msp-service-portrait
-status: in-progress
+status: delivered
 updated: 2026-09-18
 branch: feat/msp-service-portrait
-commits: 
+commits: 8491f3b9221050c9fdecf96e154cd8c6d2cbe609..HEAD
 ---
 
 # MSP 服务行为客户画像
 
 ## Report
+
+**What was built** — 将织女从「七维自由洞察」主路径重构为 **MSP 服务行为 → 客户运维画像**：服务记录结构化分类（领域/类型/技术，LLM 优先、规则兜底、可手选），指标由已分类 Event 确定性聚合；主导航与客户主路径改为客户列表 / 客户画像 / 服务行为 / 多维分析 / 画像洞察；AI 行为洞察措辞用推断语气；提供 3 个 MSP 演示客户种子数据。旧七维洞察/备注/版本 API 保留，UI 降为画像页折叠区。
+
+**Verification** —
+- `npm run typecheck`（api+web）PASS
+- `LLM_API_KEY= npm test --workspace=@zhinu/api` PASS **27/27**（taxonomy/metrics 单测 + 集成：自动分类、needsClassification、人工分类、seed 幂等、analytics preset、reclassify、service-insights）
+- `npm run build --workspace=@zhinu/web` PASS（chunk size warning 为预存在）
+- 独立复审 general-2：C1–C6 与相关 major 均 PASS，**无剩余 critical**
+
+**Journey log**
+- 首版把「无 LLM Key」做成规则静默分类，与 Spec「手选」冲突；复审后定稿 **LLM→规则兜底**，并保留 `autoClassify=false` 严格路径，Spec 已修订。
+- `activityLevel` 用近 90 天月均（`recent90/3`）与全周期月均取峰值，阈值 high≥20 / medium≥6。
+- 种子 `expand()` 必须跨月分布 occurredAt，否则 90 天趋势与 preset 失真。
+- 回退 Event 继承 domain/serviceType/techs/classifySource，避免画像指标丢数。
+- Live 分类路径是 `llm.ts:classifyWithLlm`（内含规则回退），测试应覆盖该路径。
 
 ## [S1] Problem
 
@@ -329,13 +344,13 @@ AI 客户洞察卡片（可能/推测措辞）
 
 ## Tasks
 
-- [ ] T1: shared 分类词表 + 指标/标签/动作规则纯函数 — acceptance: 导出 domain/serviceType/tech/action 词表；`computeTraits`/`labelArchetype`/`matchActionLabel`/`computeActivityLevel` 单测通过 (covers: S2)
-- [ ] T2: Event 分类字段 + taxonomy API + 事件创建/分类接口 — acceptance: POST /api/events 可带分类或自动分类（LLM→规则）；`autoClassify=false` 无 domain 返回 needsClassification；POST classify；GET /api/taxonomy；rollback 继承分类字段 (covers: S2; depends: T1)
-- [ ] T3: profile / behavior / analytics API — acceptance: GET profile 返回 summary/domains/types/techs/traits/trend/archetype；behavior 返回 monthly/domainDetail/systems；analytics/customers 含特征与近90天/delta；cross preset 可查询；未知 preset 400；POST /api/analytics/reclassify 与 /api/customers/:id/reclassify 均存在 (covers: S2; depends: T2)
-- [ ] T4: AI 行为洞察 API + LLM prompt — acceptance: mock/规则返回 narrative/characteristics/archetype/caveats；无 Key 502（单测覆盖 LlmError）；不污染指标数据 (covers: S2; depends: T3)
-- [ ] T5: MSP 种子数据 — acceptance: POST /api/dev/seed 生成 3 客户与已分类事件；occurredAt 跨 12–18 个月分布；同名客户跳过；production 无 ALLOW_DEV_SEED 时 403 (covers: S2; depends: T2)
-- [ ] T6: 前端导航与服务记录录入（分类） — acceptance: 侧栏为新 IA；时间线可录领域/类型/技术；自动识别入口；列表/详情展示分类 (covers: S2; depends: T2)
-- [ ] T7: 前端客户列表 + 客户画像页 — acceptance: 列表含服务次数/活跃度/主要技术/特征；画像页展示 KPI/标签/领域（可点进 behavior）/类型/特征/趋势/AI 洞察入口；旧七维折叠 (covers: S2; depends: T3 T4 T6)
-- [ ] T8: 前端服务行为页 + 多维分析/画像洞察骨架 — acceptance: behavior 月度图与领域下钻（支持 query domain）；analytics preset 可用；insights 跨客户含近90天与 top delta (covers: S2; depends: T3 T7)
-- [ ] T9: 总览服务化改造 — acceptance: 首页指标为待分类/近 30 天服务/活跃客户/主要领域，入口指向客户列表与录入 (covers: S2; depends: T3 T6)
-- [ ] T10: 集成验证 — acceptance: typecheck；API 测试（含 mock 分类与 seed）；web build；必要冒烟 (covers: S1 S2; depends: T4 T5 T7 T8 T9)
+- [x] T1: shared 分类词表 + 指标/标签/动作规则纯函数 — acceptance: 导出 domain/serviceType/tech/action 词表；`computeTraits`/`labelArchetype`/`matchActionLabel`/`computeActivityLevel` 单测通过 (covers: S2)
+- [x] T2: Event 分类字段 + taxonomy API + 事件创建/分类接口 — acceptance: POST /api/events 可带分类或自动分类（LLM→规则）；`autoClassify=false` 无 domain 返回 needsClassification；POST classify；GET /api/taxonomy；rollback 继承分类字段 (covers: S2; depends: T1)
+- [x] T3: profile / behavior / analytics API — acceptance: GET profile 返回 summary/domains/types/techs/traits/trend/archetype；behavior 返回 monthly/domainDetail/systems；analytics/customers 含特征与近90天/delta；cross preset 可查询；未知 preset 400；POST /api/analytics/reclassify 与 /api/customers/:id/reclassify 均存在 (covers: S2; depends: T2)
+- [x] T4: AI 行为洞察 API + LLM prompt — acceptance: mock/规则返回 narrative/characteristics/archetype/caveats；无 Key 502（单测覆盖 LlmError）；不污染指标数据 (covers: S2; depends: T3)
+- [x] T5: MSP 种子数据 — acceptance: POST /api/dev/seed 生成 3 客户与已分类事件；occurredAt 跨 12–18 个月分布；同名客户跳过；production 无 ALLOW_DEV_SEED 时 403 (covers: S2; depends: T2)
+- [x] T6: 前端导航与服务记录录入（分类） — acceptance: 侧栏为新 IA；时间线可录领域/类型/技术；自动识别入口；列表/详情展示分类 (covers: S2; depends: T2)
+- [x] T7: 前端客户列表 + 客户画像页 — acceptance: 列表含服务次数/活跃度/主要技术/特征；画像页展示 KPI/标签/领域（可点进 behavior）/类型/特征/趋势/AI 洞察入口；旧七维折叠 (covers: S2; depends: T3 T4 T6)
+- [x] T8: 前端服务行为页 + 多维分析/画像洞察骨架 — acceptance: behavior 月度图与领域下钻（支持 query domain）；analytics preset 可用；insights 跨客户含近90天与 top delta (covers: S2; depends: T3 T7)
+- [x] T9: 总览服务化改造 — acceptance: 首页指标为待分类/近 30 天服务/活跃客户/主要领域，入口指向客户列表与录入 (covers: S2; depends: T3 T6)
+- [x] T10: 集成验证 — acceptance: typecheck；API 测试（含 mock 分类与 seed）；web build；必要冒烟 (covers: S1 S2; depends: T4 T5 T7 T8 T9)

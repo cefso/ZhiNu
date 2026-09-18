@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAsync } from '../hooks';
-import { PORTRAIT_DIMENSIONS } from '@zhinu/shared';
+import { PORTRAIT_DIMENSIONS, domainLabel } from '@zhinu/shared';
 
 type Profile = {
   customer: { id: string; name: string; company?: string };
@@ -272,7 +272,7 @@ export default function PortraitPage() {
           <div className="bar-list">
             {p.trend.deltas.slice(0, 6).map((d) => (
               <div key={d.domain} className="bar-row">
-                <span className="bar-label">{d.domain}</span>
+                <span className="bar-label">{domainLabel(d.domain)}</span>
                 <div className="delta-pills">
                   <span className="chip">
                     {d.previous} → {d.current}
