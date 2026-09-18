@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import session from '@fastify/session';
 import { env } from './env.js';
 import { closeDriver } from './neo4j.js';
+import { Neo4jSessionStore } from './sessionStore.js';
 import { authRoutes, inviteRoutes } from './routes/auth.js';
 import { customerRoutes } from './routes/customers.js';
 import { eventRoutes } from './routes/events.js';
@@ -14,20 +15,31 @@ import { settingsRoutes } from './routes/settings.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
+  const sessionStore = new Neo4jSessionStore();
 
   await app.register(cors, {
     origin: true,
     credentials: true,
   });
   await app.register(cookie);
-  await app.register(session, {
+  await app.register(session as any, {
     secret: env.SESSION_SECRET,
+    store: sessionStore as any,
     cookie: {
       secure: false,
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60,
+      sameSite: 'lax',
     },
   });
+
+  const pruneTimer = setInterval(
+    () => {
+      sessionStore.pruneExpired().catch(() => undefined);
+    },
+    60 * 60 * 1000,
+  );
+  pruneTimer.unref?.();
 
   app.get('/api/health', async () => ({ ok: true, service: 'zhinu' }));
 
@@ -42,6 +54,7 @@ export async function buildApp() {
   await app.register(noteRoutes, { prefix: '/api' });
 
   app.addHook('onClose', async () => {
+    clearInterval(pruneTimer);
     await closeDriver();
   });
 
