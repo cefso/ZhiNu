@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import bcrypt from 'bcryptjs';
 import { buildApp } from '../app.js';
 import { ensureSchema } from '../schema.js';
 import { closeDriver, withSession } from '../neo4j.js';
@@ -10,14 +11,23 @@ const skip = !process.env.NEO4J_PASSWORD;
 let app: FastifyInstance;
 
 async function loginAsAdmin(app: FastifyInstance) {
+  const email = process.env.ADMIN_EMAIL ?? 'admin@zhinu.local';
+  const password = process.env.ADMIN_PASSWORD ?? 'change-me-admin';
   await app.inject({ method: 'POST', url: '/api/auth/bootstrap' });
+  // ensure password matches env (bootstrap only seeds empty graph)
+  await withSession(async (s) => {
+    const hash = await bcrypt.hash(password, 10);
+    await s.run(
+      `MERGE (u:User {email: $email})
+       ON CREATE SET u.id = randomUUID(), u.name = 'Admin', u.role = 'admin', u.createdAt = datetime()
+       SET u.passwordHash = $hash`,
+      { email, hash },
+    );
+  });
   const login = await app.inject({
     method: 'POST',
     url: '/api/auth/login',
-    payload: {
-      email: process.env.ADMIN_EMAIL ?? 'admin@zhinu.local',
-      password: process.env.ADMIN_PASSWORD ?? 'change-me-admin',
-    },
+    payload: { email, password },
   });
   assert.equal(login.statusCode, 200, login.body);
   const raw = login.cookies as Array<string | { name: string; value: string }>;
