@@ -6,6 +6,55 @@ import { computeProfileMetrics, loadCustomerEvents } from '../services/metrics.j
 import { computeTraits, domainLabel, labelArchetype } from '@zhinu/shared';
 
 export async function analyticsRoutes(app: FastifyInstance) {
+  app.post('/reclassify', async (req, reply) => {
+    const auth = requireAuth(req, reply);
+    if (!auth) return;
+    const { withReadTx, withWriteTx } = await import('../neo4j.js');
+    const { classifyWithLlm } = await import('../llm.js');
+    const pending = await withReadTx(async (tx) => {
+      const res = await tx.run(
+        `MATCH (e:Event {status: 'active'})
+         WHERE e.domain IS NULL
+         OPTIONAL MATCH (e)-[:MENTIONS]->(s:System)
+         RETURN e.id AS id, e.title AS title, e.content AS content,
+                collect(DISTINCT s.name) AS systemNames`,
+      );
+      return res.records.map((r) => ({
+        id: r.get('id') as string,
+        title: r.get('title') as string,
+        content: (r.get('content') as string) ?? '',
+        systemNames: (r.get('systemNames') as string[]).filter(Boolean),
+      }));
+    });
+    let updated = 0;
+    for (const e of pending) {
+      const result = await classifyWithLlm({
+        title: e.title,
+        content: e.content,
+        systemNames: e.systemNames,
+      });
+      await withWriteTx(async (tx) => {
+        await tx.run(
+          `MATCH (e:Event {id: $id})
+           SET e.domain = $domain,
+               e.serviceType = $serviceType,
+               e.techs = $techs,
+               e.classifiedAt = datetime(),
+               e.classifySource = $source`,
+          {
+            id: e.id,
+            domain: result.domain,
+            serviceType: (result.serviceType ?? null) as string | null,
+            techs: result.techs,
+            source: result.source === 'llm' ? 'llm' : 'rule',
+          },
+        );
+      });
+      updated += 1;
+    }
+    return { pending: pending.length, updated, scope: 'all' };
+  });
+
   app.get('/customers', async (req, reply) => {
     const auth = requireAuth(req, reply);
     if (!auth) return;
@@ -47,6 +96,9 @@ export async function analyticsRoutes(app: FastifyInstance) {
           labels: metrics.traits.labels,
           lastServiceAt: metrics.summary.lastServiceAt,
           archetype: metrics.archetype.title,
+          recent90Count: metrics.trend.current.total,
+          topDeltaDomain: metrics.trend.deltas[0]?.domain ?? null,
+          topDeltaPct: metrics.trend.deltas[0]?.changePct ?? null,
         };
       });
     });
@@ -68,14 +120,26 @@ export async function analyticsRoutes(app: FastifyInstance) {
     const { dims, preset } = query.data;
 
     if (preset) {
-      return handlePreset(preset);
+      const result = await handlePreset(preset);
+      if ('httpError' in result) {
+        return reply.code(400).send(result.httpError);
+      }
+      return result;
     }
 
     if (!dims) return reply.code(400).send({ error: 'dims or preset required' });
     const [a, b] = dims.split(',').map((s) => s.trim());
-    const allowed = new Set(['domain', 'serviceType', 'tech', 'customer', 'month']);
-    if (!a || !b || !allowed.has(a) || !allowed.has(b)) {
+    const groupA = new Set(['domain', 'serviceType', 'tech']);
+    const groupB = new Set(['customer', 'month']);
+    if (!a || !b) {
       return reply.code(400).send({ error: 'Unsupported dims. Use domain|serviceType|tech × customer|month' });
+    }
+    const ok =
+      (groupA.has(a) && groupB.has(b)) || (groupB.has(a) && groupA.has(b));
+    if (!ok) {
+      return reply
+        .code(400)
+        .send({ error: 'Unsupported dims. Use domain|serviceType|tech × customer|month' });
     }
 
     const rows = await withReadTx(async (tx) => {
@@ -186,9 +250,11 @@ async function handlePreset(preset: string) {
     }
     default:
       return {
-        error: 'Unknown preset',
-        available: ['mysql_dependency', 'k8s_growth', 'fault_ratio', 'volume_growth'],
-      };
+        httpError: {
+          error: 'Unknown preset',
+          available: ['mysql_dependency', 'k8s_growth', 'fault_ratio', 'volume_growth'],
+        },
+      } as const;
   }
 }
 

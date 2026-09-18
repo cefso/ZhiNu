@@ -45,15 +45,21 @@ function ev(
 }
 
 function expand(base: SeedEvent, count: number, variants: string[]): SeedEvent[] {
-  const out: SeedEvent[] = [base];
-  for (let i = 1; i < count; i++) {
+  const out: SeedEvent[] = [];
+  const n = Math.max(1, Math.min(count, 60));
+  // Spread across the base window (base.monthsAgo → 0) instead of collapsing into recent months
+  const span = Math.max(base.monthsAgo, 1);
+  for (let i = 0; i < n; i++) {
     const v = variants[i % variants.length];
+    // bias slightly toward recent months for high-frequency patterns
+    const t = n === 1 ? 0 : i / (n - 1);
+    const monthsAgo = Math.max(0, Math.round(span * (1 - Math.pow(t, 0.75))));
     out.push({
       ...base,
-      title: `${base.title}${i > 1 ? ` #${i}` : ''}`,
-      content: `${base.content}（第 ${i + 1} 次：${v}）`,
-      monthsAgo: Math.max(0, base.monthsAgo - Math.floor(i / 2)),
-      day: ((base.day + i * 3) % 27) + 1,
+      title: i === 0 ? base.title : `${base.title}${i > 1 ? ` #${i}` : ''}`,
+      content: i === 0 ? base.content : `${base.content}（第 ${i + 1} 次：${v}）`,
+      monthsAgo,
+      day: ((base.day + i * 5) % 27) + 1,
     });
   }
   return out;
@@ -64,34 +70,35 @@ const xxTech: SeedCustomer = {
   company: 'XX互联网科技有限公司',
   events: [
     ...expand(
-      ev('MySQL慢查询排查', '协助排查订单库慢查询，定位缺失索引', 1, 12, 'database', 'incident', ['MySQL'], ['订单系统']),
-      28,
+      ev('MySQL慢查询排查', '协助排查订单库慢查询，定位缺失索引', 14, 12, 'database', 'incident', ['MySQL'], ['订单系统']),
+      22,
       ['补充执行计划', '调整索引', '会话阻塞分析'],
     ),
     ...expand(
-      ev('Redis扩容', '缓存节点扩容与内存水位优化', 2, 18, 'cache', 'change', ['Redis'], ['会话缓存']),
+      ev('Redis扩容', '缓存节点扩容与内存水位优化', 11, 18, 'cache', 'change', ['Redis'], ['会话缓存']),
       8,
       ['扩容从节点', '清理大key'],
     ),
     ...expand(
-      ev('K8s节点故障处理', 'Worker 节点 NotReady，驱离与替换', 1, 22, 'container', 'incident', ['Kubernetes'], ['生产集群']),
-      12,
+      ev('K8s节点故障处理', 'Worker 节点 NotReady，驱离与替换', 8, 22, 'container', 'incident', ['Kubernetes'], ['生产集群']),
+      10,
       ['节点排水', '镜像拉取失败', 'Ingress 配置'],
     ),
     ...expand(
-      ev('Java应用发布', '支付服务滚动发布与回滚预案', 3, 8, 'app', 'change', ['Java'], ['支付服务']),
+      ev('Java应用发布', '支付服务滚动发布与回滚预案', 10, 8, 'app', 'change', ['Java'], ['支付服务']),
       6,
       ['配置中心刷新', '灰度发布'],
     ),
     ...expand(
-      ev('服务器扩容', '应用节点 CPU/内存扩容', 4, 15, 'server', 'change', ['Linux'], []),
+      ev('服务器扩容', '应用节点 CPU/内存扩容', 9, 15, 'server', 'change', ['Linux'], []),
       4,
       ['磁盘扩容'],
     ),
+    // Recent K8s surge for trend demo (last ~90 days)
     ...expand(
-      ev('K8s配置修改', 'Deployment 与 Ingress 调整', 0, 5, 'container', 'change', ['Kubernetes'], ['生产集群']),
-      10,
-      ['HPA 参数', '资源 request/limit'],
+      ev('K8s配置修改', 'Deployment 与 Ingress 调整', 2, 5, 'container', 'change', ['Kubernetes'], ['生产集群']),
+      14,
+      ['HPA 参数', '资源 request/limit', '节点扩容'],
     ),
   ],
 };
@@ -101,23 +108,23 @@ const xxGroup: SeedCustomer = {
   company: 'XX集团信息中心',
   events: [
     ...expand(
-      ev('Oracle 例行巡检', '表空间与监听状态检查', 2, 10, 'database', 'routine', ['Oracle'], ['ERP']),
-      10,
+      ev('Oracle 例行巡检', '表空间与监听状态检查', 12, 10, 'database', 'routine', ['Oracle'], ['ERP']),
+      12,
       ['AWR 简报', '备份校验'],
     ),
     ...expand(
-      ev('VMware 虚机迁移', '测试环境虚机迁移与快照清理', 5, 20, 'server', 'change', ['VMware'], ['虚拟化平台']),
-      6,
+      ev('VMware 虚机迁移', '测试环境虚机迁移与快照清理', 10, 20, 'server', 'change', ['VMware'], ['虚拟化平台']),
+      8,
       ['资源池调整'],
     ),
     ...expand(
-      ev('Oracle 参数调整', '根据会话数调整 processes/sessions', 3, 12, 'database', 'change', ['Oracle'], ['ERP']),
-      4,
+      ev('Oracle 参数调整', '根据会话数调整 processes/sessions', 8, 12, 'database', 'change', ['Oracle'], ['ERP']),
+      6,
       ['归档目录扩容'],
     ),
     ...expand(
-      ev('月度运维报告', '输出系统可用性与容量报告', 1, 3, 'server', 'routine', ['Linux'], []),
-      6,
+      ev('月度运维报告', '输出系统可用性与容量报告', 11, 3, 'server', 'routine', ['Linux'], []),
+      8,
       ['容量趋势'],
     ),
   ],
@@ -128,23 +135,23 @@ const xxMfg: SeedCustomer = {
   company: 'XX精密制造',
   events: [
     ...expand(
-      ev('Windows 文件服务故障', '文件服务器共享不可用', 2, 14, 'server', 'incident', ['Windows Server'], ['文件服务']),
+      ev('Windows 文件服务故障', '文件服务器共享不可用', 10, 14, 'server', 'incident', ['Windows Server'], ['文件服务']),
       8,
       ['磁盘只读', '权限异常'],
     ),
     ...expand(
-      ev('SQL Server 报警处理', '事务日志占满导致写入失败', 1, 9, 'database', 'incident', ['SQL Server'], ['MES']),
+      ev('SQL Server 报警处理', '事务日志占满导致写入失败', 8, 9, 'database', 'incident', ['SQL Server'], ['MES']),
       7,
       ['日志备份', '锁等待'],
     ),
     ...expand(
-      ev('杀毒与加固咨询', '终端安全与补丁策略咨询', 4, 11, 'security', 'consult', ['堡垒机'], []),
-      4,
+      ev('杀毒与加固咨询', '终端安全与补丁策略咨询', 9, 11, 'security', 'consult', ['堡垒机'], []),
+      5,
       ['基线核查'],
     ),
     ...expand(
-      ev('MES 发布支持', '制造执行系统版本更新协助', 3, 25, 'app', 'project', ['Java'], ['MES']),
-      3,
+      ev('MES 发布支持', '制造执行系统版本更新协助', 7, 25, 'app', 'project', ['Java'], ['MES']),
+      4,
       ['回滚演练'],
     ),
   ],
@@ -156,9 +163,11 @@ export async function seedRoutes(app: FastifyInstance) {
   app.post('/dev/seed', async (req, reply) => {
     const auth = requireAuth(req, reply);
     if (!auth) return;
+    if (auth.role !== 'admin' && env.NODE_ENV === 'production') {
+      return reply.code(403).send({ error: 'Admin required' });
+    }
 
-    const allow =
-      env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_SEED === 'true' || process.env.ALLOW_DEV_SEED === '1';
+    const allow = env.NODE_ENV !== 'production' || env.ALLOW_DEV_SEED;
     if (!allow) {
       return reply.code(403).send({ error: 'Dev seed disabled in production' });
     }

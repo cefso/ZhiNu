@@ -209,7 +209,11 @@ export default function PortraitPage() {
           <h2 style={{ marginTop: 0 }}>技术领域画像</h2>
           <div className="bar-list">
             {p.domains.map((d) => (
-              <div key={d.key} className="bar-row">
+              <Link
+                key={d.key}
+                to={`/customers/${id}/behavior?domain=${d.key}`}
+                className="bar-row as-button"
+              >
                 <span className="bar-label">{d.label}</span>
                 <div className="bar-track">
                   <div
@@ -220,7 +224,7 @@ export default function PortraitPage() {
                 <span className="bar-count">
                   {d.count} · {Math.round(d.share * 100)}%
                 </span>
-              </div>
+              </Link>
             ))}
             {!p.domains.length ? <p className="muted">暂无已分类数据</p> : null}
           </div>

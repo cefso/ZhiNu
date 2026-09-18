@@ -20,7 +20,7 @@ export const SERVICE_DOMAINS: { key: ServiceDomain; label: string; techs: string
   {
     key: 'database',
     label: '数据库',
-    techs: ['MySQL', 'PostgreSQL', 'Oracle', 'SQL Server', 'MongoDB', 'Redis'],
+    techs: ['MySQL', 'PostgreSQL', 'Oracle', 'SQL Server', 'MongoDB'],
   },
   { key: 'container', label: '容器 / K8s', techs: ['Kubernetes', 'Docker', 'Helm'] },
   { key: 'cache', label: '缓存', techs: ['Redis', 'Memcached'] },
@@ -76,12 +76,12 @@ export const ACTION_KEYWORDS: { label: string; keywords: string[] }[] = [
   { label: '慢查询优化', keywords: ['慢查询', 'slow query', 'slowquery', '性能优化', 'optimize'] },
   { label: '故障处理', keywords: ['故障', '宕机', '不可用', '502', '503', 'down', 'incident', '报警', '告警'] },
   { label: '扩容', keywords: ['扩容', 'scale', '扩容节点', '增加节点', '加机器'] },
-  { label: '版本升级', keywords: ['升级', 'upgrade', '版本'] },
+  { label: '版本升级', keywords: ['升级', 'upgrade', '版本升级'] },
   { label: '备份恢复', keywords: ['备份', '恢复', 'backup', 'restore', '还原'] },
-  { label: '参数调整', keywords: ['参数', '配置修改', '调优', 'config'] },
-  { label: '配置变更', keywords: ['配置', '修改配置', 'nginx配置', 'yaml', 'ingress'] },
+  { label: '参数调整', keywords: ['参数', '调优', '参数调整'] },
+  { label: '配置变更', keywords: ['配置修改', 'nginx配置', 'ingress配置', 'yaml'] },
   { label: '安全加固', keywords: ['安全', '加固', '漏洞', '等保', '基线'] },
-  { label: '部署发布', keywords: ['部署', '发布', '上线', 'deploy', '发布'] },
+  { label: '部署发布', keywords: ['部署', '发布', '上线', 'deploy'] },
   { label: '巡检', keywords: ['巡检', '检查', '健康检查'] },
   { label: '咨询支持', keywords: ['咨询', '方案', '评估', '答疑'] },
 ];
@@ -120,13 +120,31 @@ export function normalizeServiceType(raw: string | null | undefined): ServiceTyp
   return hit ? hit.key : null;
 }
 
+const TECH_ALIASES: Record<string, string> = {
+  k8s: 'Kubernetes',
+  kubernetes: 'Kubernetes',
+  docker: 'Docker',
+  mysql: 'MySQL',
+  postgres: 'PostgreSQL',
+  postgresql: 'PostgreSQL',
+  oracle: 'Oracle',
+  mongodb: 'MongoDB',
+  redis: 'Redis',
+  nginx: 'Nginx',
+  'sql server': 'SQL Server',
+  mssql: 'SQL Server',
+  'windows server': 'Windows Server',
+  'ci/cd': 'CI/CD',
+  cicd: 'CI/CD',
+};
+
 export function normalizeTech(raw: string): string {
   const t = raw.trim();
   if (!t) return '';
-  const hit = TECH_DICTIONARY.find(
-    (d) => d.name.toLowerCase() === t.toLowerCase() || d.name.toLowerCase().includes(t.toLowerCase()),
-  );
-  return hit?.name ?? t;
+  const lower = t.toLowerCase();
+  if (TECH_ALIASES[lower]) return TECH_ALIASES[lower];
+  const exact = TECH_DICTIONARY.find((d) => d.name.toLowerCase() === lower);
+  return exact?.name ?? t;
 }
 
 export function techDomain(name: string): ServiceDomain | undefined {
@@ -158,8 +176,11 @@ export function buildShares<T extends string>(
 
 export function computeActivityLevel(monthlyAvg: number, recent90Count: number): ActivityLevel {
   if (recent90Count <= 0 && monthlyAvg <= 0) return 'none';
-  if (recent90Count >= 20 || monthlyAvg >= 15) return 'high';
-  if (recent90Count >= 6 || monthlyAvg >= 5) return 'medium';
+  // Spec: 近 90 天月均 high≥20 / medium≥6（月均≈近90天次数/3），并用全周期月均兜底
+  const monthlyAvg90 = recent90Count / 3;
+  const peak = Math.max(monthlyAvg90, monthlyAvg);
+  if (peak >= 20) return 'high';
+  if (peak >= 6) return 'medium';
   return 'low';
 }
 

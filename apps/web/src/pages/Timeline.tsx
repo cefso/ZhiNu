@@ -178,9 +178,52 @@ export default function TimelinePage() {
             value={form.systemNames}
             onChange={(e) => setForm({ ...form, systemNames: e.target.value })}
           />
-          <button type="submit" className="btn">
-            追加
-          </button>
+          <div className="row">
+            <button type="submit" className="btn">
+              追加
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={async () => {
+                if (!form.title.trim()) {
+                  alert('请先填写标题，再自动识别');
+                  return;
+                }
+                const res = await api<{
+                  event: { domain?: string; serviceType?: string; techs?: string[] };
+                }>('/api/events', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    customerId: form.customerId || customers.data?.customers[0]?.id,
+                    title: form.title,
+                    content: form.content || form.title,
+                    occurredAt: new Date(form.occurredAt).toISOString(),
+                    systemNames: form.systemNames
+                      .split(/[,，\s]+/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                    // preview path: create then user can correct; fill form from result
+                  }),
+                }).catch(() => null);
+                if (res?.event) {
+                  setForm((f) => ({
+                    ...f,
+                    domain: res.event.domain ?? f.domain,
+                    serviceType: res.event.serviceType ?? f.serviceType,
+                    techs: (res.event.techs ?? []).join(',') || f.techs,
+                    title: '',
+                    content: '',
+                    systemNames: '',
+                  }));
+                  events.reload();
+                  alert('已保存并自动分类，可在列表中修正分类字段');
+                }
+              }}
+            >
+              自动识别并追加
+            </button>
+          </div>
         </form>
       </div>
 

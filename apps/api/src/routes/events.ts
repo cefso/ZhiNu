@@ -74,6 +74,7 @@ export async function eventRoutes(app: FastifyInstance) {
         domain: z.string().optional(),
         serviceType: z.string().optional(),
         techs: z.array(z.string()).optional(),
+        autoClassify: z.boolean().optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid body' });
@@ -86,6 +87,23 @@ export async function eventRoutes(app: FastifyInstance) {
     let classifySource: 'human' | 'llm' | 'rule' | undefined;
     if (domain) {
       classifySource = 'human';
+      if (!serviceType || !techs.length) {
+        const fill = await classifyWithLlm({
+          title: parsed.data.title,
+          content: parsed.data.content,
+          systemNames: parsed.data.systemNames,
+        });
+        serviceType = (serviceType ?? fill.serviceType ?? null) as
+          | typeof serviceType
+          | null;
+        if (!techs.length) techs = fill.techs;
+      }
+    } else if (parsed.data.autoClassify === false) {
+      return reply.code(400).send({
+        error: 'needsClassification',
+        needsClassification: true,
+        message: '请提供 domain/serviceType/techs，或允许自动分类',
+      });
     } else {
       const classified = await classifyWithLlm({
         title: parsed.data.title,
@@ -413,7 +431,7 @@ export async function eventRoutes(app: FastifyInstance) {
       if (currentRec.get('status') !== 'active') return { notActive: true as const };
 
       const version = await tx.run(
-        `MATCH (v:Event {id: $versionId}) RETURN v.title AS title, v.content AS content, v.occurredAt AS occurredAt, v.tags AS tags, v.customerId AS customerId`,
+        `MATCH (v:Event {id: $versionId}) RETURN v.title AS title, v.content AS content, v.occurredAt AS occurredAt, v.tags AS tags, v.customerId AS customerId, v.domain AS domain, v.serviceType AS serviceType, v.techs AS techs`,
         { versionId: parsed.data.versionEventId },
       );
       const vRec = version.records[0];
@@ -426,6 +444,9 @@ export async function eventRoutes(app: FastifyInstance) {
       const content = vRec.get('content') as string;
       const occurredAt = vRec.get('occurredAt') as string;
       const tags = (vRec.get('tags') as string[] | null) ?? [];
+      const domain = (vRec.get('domain') as string | null) ?? null;
+      const serviceType = (vRec.get('serviceType') as string | null) ?? null;
+      const techs = (vRec.get('techs') as string[] | null) ?? [];
 
       await tx.run(
         `MATCH (old:Event {id: $id})
@@ -438,6 +459,11 @@ export async function eventRoutes(app: FastifyInstance) {
            occurredAt: $occurredAt,
            tags: $tags,
            status: 'active',
+           domain: $domain,
+           serviceType: $serviceType,
+           techs: $techs,
+           classifiedAt: datetime(),
+           classifySource: CASE WHEN $domain IS NULL THEN NULL ELSE 'human' END,
            createdAt: datetime(),
            createdBy: $createdBy,
            rollbackFrom: $versionId
@@ -453,6 +479,9 @@ export async function eventRoutes(app: FastifyInstance) {
           content,
           occurredAt,
           tags,
+          domain,
+          serviceType,
+          techs,
           createdBy: auth.userId,
           versionId: parsed.data.versionEventId,
         },

@@ -7,6 +7,9 @@ type CustomerRow = {
   name: string;
   company?: string;
   serviceCount: number;
+  recent90Count?: number;
+  topDeltaDomain?: string | null;
+  topDeltaPct?: number | null;
   activityLevel: string;
   topTechs: string[];
   topDomains: string[];
@@ -59,6 +62,14 @@ export default function InsightsPage() {
             </div>
             <div className="muted small">
               服务 {c.serviceCount} 次
+              {typeof c.recent90Count === 'number' ? ` · 近90天 ${c.recent90Count}` : ''}
+              {c.topDeltaDomain
+                ? ` · 变化 ${c.topDeltaDomain}${
+                    typeof c.topDeltaPct === 'number'
+                      ? ` ${c.topDeltaPct >= 0 ? '↑' : '↓'}${Math.abs(c.topDeltaPct)}%`
+                      : ''
+                  }`
+                : ''}
               {c.topDomains.length ? ` · ${c.topDomains.join(' / ')}` : ''}
               {c.topTechs.length ? ` · ${c.topTechs.join(' / ')}` : ''}
             </div>

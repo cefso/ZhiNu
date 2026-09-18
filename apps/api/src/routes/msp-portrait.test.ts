@@ -86,6 +86,40 @@ test('event create auto-classifies via rules without llm key', { skip }, async (
   assert.equal(event.domain, 'database');
   assert.equal(event.serviceType, 'incident');
   assert.ok((event.techs ?? []).includes('MySQL'));
+  assert.ok(['rule', 'llm'].includes(event.classifySource));
+
+  const strict = await app.inject({
+    method: 'POST',
+    url: '/api/events',
+    headers: { cookie },
+    payload: {
+      customerId,
+      title: '神秘事项',
+      content: '无关键词',
+      occurredAt: '2026-08-02',
+      autoClassify: false,
+    },
+  });
+  assert.equal(strict.statusCode, 400);
+  assert.equal(strict.json().needsClassification, true);
+
+  const manual = await app.inject({
+    method: 'POST',
+    url: '/api/events',
+    headers: { cookie },
+    payload: {
+      customerId,
+      title: '手工分类项',
+      content: 'x',
+      occurredAt: '2026-08-03',
+      domain: 'security',
+      serviceType: 'consult',
+      techs: ['堡垒机'],
+    },
+  });
+  assert.equal(manual.statusCode, 200, manual.body);
+  assert.equal(manual.json().event.classifySource, 'human');
+  assert.equal(manual.json().event.domain, 'security');
 
   const profile = await app.inject({
     method: 'GET',
@@ -94,8 +128,8 @@ test('event create auto-classifies via rules without llm key', { skip }, async (
   });
   assert.equal(profile.statusCode, 200, profile.body);
   const p = profile.json().profile;
-  assert.equal(p.summary.serviceCount, 1);
-  assert.equal(p.summary.classifiedCount, 1);
+  assert.equal(p.summary.serviceCount, 2);
+  assert.equal(p.summary.classifiedCount, 2);
   assert.ok(p.domains.some((d: { key: string }) => d.key === 'database'));
 
   const behavior = await app.inject({
@@ -114,6 +148,26 @@ test('event create auto-classifies via rules without llm key', { skip }, async (
   assert.equal(insights.statusCode, 200);
   assert.equal(insights.json().insights.source, 'rule');
   assert.ok(insights.json().insights.caveats.length > 0);
+
+  const noKey = await app.inject({
+    method: 'GET',
+    url: `/api/customers/${customerId}/service-insights`,
+    headers: { cookie },
+  });
+  // With empty/invalid key in test env, LLM path should fail or fall back via 502 body
+  if (noKey.statusCode === 502) {
+    assert.ok(noKey.json().fallback || noKey.json().error);
+  } else {
+    assert.equal(noKey.statusCode, 200);
+    assert.ok(noKey.json().insights);
+  }
+
+  const unknownPreset = await app.inject({
+    method: 'GET',
+    url: '/api/analytics/cross?preset=nope',
+    headers: { cookie },
+  });
+  assert.equal(unknownPreset.statusCode, 400);
 });
 
 test('seed creates msp customers and analytics list', { skip }, async () => {
@@ -151,8 +205,19 @@ test('seed creates msp customers and analytics list', { skip }, async () => {
   const tech = customers.find((c) => c.name === 'XX科技');
   assert.ok(tech);
   assert.ok(tech.serviceCount >= 30);
+  assert.ok(tech.serviceCount <= 80);
   assert.ok(tech.topTechs.includes('MySQL'));
   assert.ok(tech.labels.length > 0);
+  assert.ok(typeof (tech as { recent90Count?: number }).recent90Count === 'number');
+
+  const reclassifyAll = await app.inject({
+    method: 'POST',
+    url: '/api/analytics/reclassify',
+    headers: { cookie },
+    payload: {},
+  });
+  assert.equal(reclassifyAll.statusCode, 200);
+  assert.ok(typeof reclassifyAll.json().updated === 'number');
 
   const cross = await app.inject({
     method: 'GET',

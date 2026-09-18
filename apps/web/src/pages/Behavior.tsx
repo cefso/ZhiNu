@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 
@@ -26,11 +26,17 @@ type Behavior = {
 
 export default function BehaviorPage() {
   const { id } = useParams();
+  const [params] = useSearchParams();
   const { data, error, loading } = useAsync(
     () => api<{ behavior: Behavior }>(`/api/customers/${id}/behavior`),
     [id],
   );
-  const [domain, setDomain] = useState<string | null>(null);
+  const [domain, setDomain] = useState<string | null>(params.get('domain'));
+
+  useEffect(() => {
+    const d = params.get('domain');
+    if (d) setDomain(d);
+  }, [params]);
 
   if (loading) return <div className="page-pad muted">加载服务行为…</div>;
   if (error) return <div className="page-pad error">{error}</div>;

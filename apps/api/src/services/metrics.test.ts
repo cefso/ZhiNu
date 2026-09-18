@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyByRules, classifyServiceRecord, normalizeClassifyPayload } from '../services/classify.js';
 import { computeProfileMetrics, computeBehavior } from '../services/metrics.js';
-import { ruleServiceInsights } from '../llm.js';
+import { ruleServiceInsights, serviceInsightsWithLlm, LlmError } from '../llm.js';
+import { computeActivityLevel } from '@zhinu/shared';
 
 test('classifyByRules detects mysql incident', () => {
   const r = classifyByRules({
@@ -119,4 +120,38 @@ test('ruleServiceInsights uses possible language', () => {
   assert.equal(insights.source, 'rule');
   assert.ok(insights.caveats.length > 0);
   assert.ok(insights.narrative.join('').includes('服务'));
+});
+
+test('serviceInsightsWithLlm throws without key', async () => {
+  const profile = computeProfileMetrics({
+    customer: { id: 'c', name: 'X' },
+    events: [
+      {
+        id: '1',
+        title: 'MySQL故障',
+        content: '',
+        occurredAt: '2026-08-01',
+        domain: 'database',
+        serviceType: 'incident',
+        techs: ['MySQL'],
+        status: 'active',
+      },
+    ],
+  });
+  await assert.rejects(
+    () =>
+      serviceInsightsWithLlm(profile, ['MySQL故障'], {
+        llmBaseUrl: 'http://127.0.0.1:9',
+        llmModel: 'test',
+        temperature: 0,
+        llmApiKey: '',
+      } as never),
+    (err: unknown) => err instanceof LlmError,
+  );
+});
+
+test('activity level follows monthly-avg contract', () => {
+  assert.equal(computeActivityLevel(0, 60), 'high');
+  assert.equal(computeActivityLevel(0, 20), 'medium');
+  assert.equal(computeActivityLevel(0, 3), 'low');
 });

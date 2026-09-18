@@ -30,7 +30,7 @@ commits:
 | 产品定位 | **客户服务画像 / 运维画像**：从 MSP 服务记录推导客户特征 |
 | 改造策略 | **重构为主**：主导航与客户主路径切换为服务画像；旧七维洞察/备注/版本数据保留，降为画像页折叠区 |
 | 本轮范围 | **核心闭环**：分类体系 + 结构化 Event + 指标 API + 客户列表/画像/服务行为 + AI 行为洞察 + 种子数据；多维分析与全局画像洞察做可用骨架 |
-| 分类方式 | **LLM 自动分类**；结果写入 Event；无 Key/失败时表单手选；测试与种子使用 mock/预分类数据 |
+| 分类方式 | **LLM 优先，规则兜底**：无 Key/LLM 失败时用关键词规则自动写入（`classifySource=rule|llm`）；body 带 `domain` 则 `human`；`autoClassify=false` 且无 domain → 400 `needsClassification` |
 | 指标计算 | **确定性聚合**（基于已落库的 domain/serviceType/techs），不依赖 LLM 在线重算 |
 | 种子数据 | 管理员可触发 MSP 演示种子（3 类典型客户 + 分类后服务史） |
 | 品牌 | 保留「织女」；视觉延续冷灰底 + 靛青强调 |
@@ -100,7 +100,7 @@ Event {
 }
 ```
 
-- 创建：body 可带 `domain` / `serviceType` / `techs`；若缺省且 LLM 可用，同步调用分类后写入；LLM 不可用则返回 `needsClassification: true` 并允许前端手选后 `PATCH` 或带分类重提。
+- 创建：body 可带 `domain` / `serviceType` / `techs`；若缺省则自动分类（LLM 优先，失败回退规则词表）后写入；`autoClassify: false` 且未带 `domain` 时返回 400 `{ needsClassification: true }`。回退/修正产生的新 Event **继承或重分类**分类字段。
 - 修正 SUPERSEDES：新事件继承或重分类，不自动信任旧分类字段以外的正文。
 - 指标与画像**只统计** `status=active` 且 `domain`/`serviceType` 非空的事件；未分类事件计入「待分类」，不进入领域占比分母（列表可显示待分类数）。
 
@@ -161,7 +161,7 @@ Event {
 }
 ```
 
-- `activityLevel`: 按近 90 天月均服务次数分档：`high` ≥ 20，`medium` ≥ 6，`low` < 6（无记录 `none`）。
+- `activityLevel`: 近 90 天**月均**（≈近90天次数/3）与全周期月均取峰值：`high` ≥ 20，`medium` ≥ 6，`low` 更低；无记录 `none`。
 - `traits` 数值 0–1，由确定性规则计算：
   - `serviceFrequency` = min(1, 月均服务次数 / 15)
   - `faultDependency` = incident 占比
@@ -221,7 +221,8 @@ Event {
 | GET | /api/customers/:id/behavior | 服务行为分析 |
 | GET | /api/customers/:id/service-insights | AI 行为洞察 |
 | GET | /api/analytics/cross | 多维交叉（query: `dims`）骨架 |
-| POST | /api/analytics/reclassify | 批量给未分类 active 事件跑 LLM（admin 或 member） |
+| POST | /api/analytics/reclassify | 批量给全库未分类 active 事件跑 LLM/规则 |
+| POST | /api/customers/:id/reclassify | 仅重分类该客户未分类事件 |
 | POST | /api/dev/seed | MSP 演示种子（见下） |
 
 `GET /api/analytics/cross?dims=domain,customer` 等支持有限组合：`domain|serviceType|tech` × `customer|month`。返回 `{ rows: [{ keys: {...}, count }] }`。不支持的 dims → 400。
@@ -234,11 +235,11 @@ Event {
 
 | 客户 | 特征 | 服务史要点 |
 |---|---|---|
-| XX科技 | 高频运维 / 数据库+K8s / 故障+变更 | 18 个月，MySQL/Redis/K8s/Java，近 90 天 K8s↑ |
-| XX集团 | 稳定型 / Oracle+VMware | 中低频，变更与例行为主 |
-| XX制造 | 传统 IT / Windows+SQL Server | 低频，故障与咨询为主 |
+| XX科技 | 高频运维 / 数据库+K8s / 故障+变更 | 约 60–70 条，分布在约 14 个月内；MySQL/Redis/K8s/Java；近 90 天 K8s 配置类明显增多 |
+| XX集团 | 稳定型 / Oracle+VMware | 约 30–40 条，例行与变更为主，跨度约 12 个月 |
+| XX制造 | 传统 IT / Windows+SQL Server | 约 20–30 条，故障与咨询为主 |
 
-- 每客户写入约 30–60 条 **已分类** Event（`classifySource=seed`），occurredAt 分布在过去 12–18 个月。
+- 每客户写入**已分类** Event（`classifySource=seed`），`occurredAt` **分散在 past 12–18 个月**（不可挤在当月），以便趋势/preset 可演示。
 - 响应：`{ seeded: [{ customer, eventCount }], skipped: string[] }`。
 
 ### 多维分析页（骨架）
@@ -254,7 +255,7 @@ Event {
 
 ### 画像洞察页（骨架）
 
-`/insights`：跨客户列表——archetype、标签、近 90 天服务量、主要 domain、top delta。数据来自各客户 profile 聚合（`GET /api/analytics/customers` 扩展字段），不做独立洞察库。
+`/insights`：跨客户列表——archetype、标签、**近 90 天服务量**、主要 domain、**top delta**。数据来自各客户 profile 聚合（`GET /api/analytics/customers` 扩展字段），不做独立洞察库。
 
 ### 前端信息架构（重构为主）
 
@@ -328,13 +329,13 @@ AI 客户洞察卡片（可能/推测措辞）
 
 ## Tasks
 
-- [ ] T1: shared 分类词表 + 指标/标签/动作规则纯函数 — acceptance: 导出 domain/serviceType/tech/action 词表；`computeTraits`/`labelArchetype`/`matchActionLabel` 单测通过 (covers: S2)
-- [ ] T2: Event 分类字段 + taxonomy API + 事件创建/分类接口 — acceptance: POST /api/events 可带分类或触发 mock LLM；POST classify；GET /api/taxonomy 返回词表；无 LLM 且未带分类时 API 明确失败或 needsClassification (covers: S2; depends: T1)
-- [ ] T3: profile / behavior / analytics API — acceptance: GET profile 返回 summary/domains/types/techs/traits/trend/archetype；behavior 返回 monthly/domainDetail/systems；analytics/customers 含特征列；cross preset 可查询 (covers: S2; depends: T2)
-- [ ] T4: AI 行为洞察 API + LLM prompt — acceptance: mock LLM 返回 narrative/characteristics/archetype/caveats；无 Key 502；不污染指标数据 (covers: S2; depends: T3)
-- [ ] T5: MSP 种子数据 — acceptance: POST /api/dev/seed 生成 3 客户与已分类事件；同名客户跳过；production 无 ALLOW_DEV_SEED 时 403 (covers: S2; depends: T2)
-- [ ] T6: 前端导航与服务记录录入（分类） — acceptance: 侧栏为新 IA；时间线可录领域/类型/技术；列表/详情展示分类 (covers: S2; depends: T2)
-- [ ] T7: 前端客户列表 + 客户画像页 — acceptance: 列表含服务次数/活跃度/主要技术/特征；画像页展示 KPI/标签/领域/类型/特征/趋势/AI 洞察入口；旧七维折叠 (covers: S2; depends: T3 T4 T6)
-- [ ] T8: 前端服务行为页 + 多维分析/画像洞察骨架 — acceptance: behavior 月度图与领域下钻；analytics preset 可用；insights 跨客户列表 (covers: S2; depends: T3 T7)
+- [ ] T1: shared 分类词表 + 指标/标签/动作规则纯函数 — acceptance: 导出 domain/serviceType/tech/action 词表；`computeTraits`/`labelArchetype`/`matchActionLabel`/`computeActivityLevel` 单测通过 (covers: S2)
+- [ ] T2: Event 分类字段 + taxonomy API + 事件创建/分类接口 — acceptance: POST /api/events 可带分类或自动分类（LLM→规则）；`autoClassify=false` 无 domain 返回 needsClassification；POST classify；GET /api/taxonomy；rollback 继承分类字段 (covers: S2; depends: T1)
+- [ ] T3: profile / behavior / analytics API — acceptance: GET profile 返回 summary/domains/types/techs/traits/trend/archetype；behavior 返回 monthly/domainDetail/systems；analytics/customers 含特征与近90天/delta；cross preset 可查询；未知 preset 400；POST /api/analytics/reclassify 与 /api/customers/:id/reclassify 均存在 (covers: S2; depends: T2)
+- [ ] T4: AI 行为洞察 API + LLM prompt — acceptance: mock/规则返回 narrative/characteristics/archetype/caveats；无 Key 502（单测覆盖 LlmError）；不污染指标数据 (covers: S2; depends: T3)
+- [ ] T5: MSP 种子数据 — acceptance: POST /api/dev/seed 生成 3 客户与已分类事件；occurredAt 跨 12–18 个月分布；同名客户跳过；production 无 ALLOW_DEV_SEED 时 403 (covers: S2; depends: T2)
+- [ ] T6: 前端导航与服务记录录入（分类） — acceptance: 侧栏为新 IA；时间线可录领域/类型/技术；自动识别入口；列表/详情展示分类 (covers: S2; depends: T2)
+- [ ] T7: 前端客户列表 + 客户画像页 — acceptance: 列表含服务次数/活跃度/主要技术/特征；画像页展示 KPI/标签/领域（可点进 behavior）/类型/特征/趋势/AI 洞察入口；旧七维折叠 (covers: S2; depends: T3 T4 T6)
+- [ ] T8: 前端服务行为页 + 多维分析/画像洞察骨架 — acceptance: behavior 月度图与领域下钻（支持 query domain）；analytics preset 可用；insights 跨客户含近90天与 top delta (covers: S2; depends: T3 T7)
 - [ ] T9: 总览服务化改造 — acceptance: 首页指标为待分类/近 30 天服务/活跃客户/主要领域，入口指向客户列表与录入 (covers: S2; depends: T3 T6)
 - [ ] T10: 集成验证 — acceptance: typecheck；API 测试（含 mock 分类与 seed）；web build；必要冒烟 (covers: S1 S2; depends: T4 T5 T7 T8 T9)

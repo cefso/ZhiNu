@@ -21,4 +21,5 @@ export const env = {
   LLM_MODEL: process.env.LLM_MODEL ?? 'gpt-4o-mini',
   ADMIN_EMAIL: process.env.ADMIN_EMAIL ?? 'admin@zhinu.local',
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ?? 'change-me-admin',
+  ALLOW_DEV_SEED: process.env.ALLOW_DEV_SEED === 'true' || process.env.ALLOW_DEV_SEED === '1',
 };

@@ -32,7 +32,17 @@ test('normalize helpers', () => {
   assert.equal(normalizeDomain('nope'), null);
   assert.equal(normalizeServiceType('故障处理'), 'incident');
   assert.equal(normalizeTech('mysql'), 'MySQL');
-  assert.equal(normalizeTech('k8s'), 'k8s');
+  assert.equal(normalizeTech('k8s'), 'Kubernetes');
+  assert.equal(normalizeTech('sql'), 'sql');
+});
+
+test('computeActivityLevel uses monthly avg thresholds', () => {
+  assert.equal(computeActivityLevel(0, 0), 'none');
+  // 20 in 90d → monthlyAvg90≈6.67 → medium
+  assert.equal(computeActivityLevel(0, 20), 'medium');
+  // 60 in 90d → monthlyAvg90=20 → high
+  assert.equal(computeActivityLevel(0, 60), 'high');
+  assert.equal(computeActivityLevel(25, 10), 'high');
 });
 
 test('matchActionLabel finds keywords', () => {
@@ -65,11 +75,6 @@ test('computeTraits and archetype rules', () => {
 });
 
 test('activity levels and trend delta', () => {
-  assert.equal(computeActivityLevel(0, 0), 'none');
-  assert.equal(computeActivityLevel(1, 2), 'low');
-  assert.equal(computeActivityLevel(6, 10), 'medium');
-  assert.equal(computeActivityLevel(20, 40), 'high');
-
   const deltas = computeTrendDelta({ container: 42, database: 76 }, { container: 18, database: 64 });
   assert.equal(deltas[0].domain, 'container');
   assert.ok(deltas[0].changePct > 100);

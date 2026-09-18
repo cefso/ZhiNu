@@ -161,7 +161,9 @@ export default function App() {
         />
         <Route
           path="/settings"
-          element={me ? <SettingsPage /> : <Navigate to="/login" replace />}
+          element={
+            me?.user.role === 'admin' ? <SettingsPage /> : <Navigate to="/" replace />
+          }
         />
       </Routes>
     </Shell>
