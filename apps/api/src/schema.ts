@@ -18,6 +18,7 @@ const CONSTRAINTS = [
   'CREATE INDEX insight_dimension IF NOT EXISTS FOR (i:Insight) ON (i.dimension)',
   'CREATE INDEX portrait_version_customer IF NOT EXISTS FOR (v:PortraitVersion) ON (v.customerId)',
   'CREATE CONSTRAINT app_settings_id IF NOT EXISTS FOR (s:AppSettings) REQUIRE s.id IS UNIQUE',
+  'CREATE CONSTRAINT http_session_sid IF NOT EXISTS FOR (s:HttpSession) REQUIRE s.sid IS UNIQUE',
 ];
 
 export async function ensureSchema() {
