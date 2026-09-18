@@ -269,6 +269,109 @@ export async function customerRoutes(app: FastifyInstance) {
     return { neighbors };
   });
 
+  app.get('/:id/profile', async (req, reply) => {
+    const auth = requireAuth(req, reply);
+    if (!auth) return;
+    const { id } = req.params as { id: string };
+    const { profileRoutePayload } = await import('./analytics.js');
+    const profile = await profileRoutePayload(id);
+    if (!profile) return reply.code(404).send({ error: 'Customer not found' });
+    return { profile };
+  });
+
+  app.get('/:id/behavior', async (req, reply) => {
+    const auth = requireAuth(req, reply);
+    if (!auth) return;
+    const { id } = req.params as { id: string };
+    const { loadCustomerEvents, computeBehavior } = await import('../services/metrics.js');
+    const loaded = await loadCustomerEvents(id);
+    if (!loaded.customer) return reply.code(404).send({ error: 'Customer not found' });
+    const customer = loaded.customer;
+    return { behavior: computeBehavior({ customer, events: loaded.events }) };
+  });
+
+  app.get('/:id/service-insights', async (req, reply) => {
+    const auth = requireAuth(req, reply);
+    if (!auth) return;
+    const { id } = req.params as { id: string };
+    const query = z.object({ mode: z.enum(['llm', 'rule']).optional() }).safeParse(req.query);
+    if (!query.success) return reply.code(400).send({ error: 'Invalid query' });
+    const { loadCustomerEvents, computeProfileMetrics } = await import('../services/metrics.js');
+    const { ruleServiceInsights, serviceInsightsWithLlm, LlmError } = await import('../llm.js');
+    const loaded = await loadCustomerEvents(id);
+    if (!loaded.customer) return reply.code(404).send({ error: 'Customer not found' });
+    const customer = loaded.customer;
+    const profile = computeProfileMetrics({ customer, events: loaded.events });
+    const recentTitles = loaded.events
+      .filter((e) => e.status === 'active')
+      .slice(-20)
+      .map((e) => e.title);
+    if (query.data.mode === 'rule') {
+      return { insights: ruleServiceInsights(profile) };
+    }
+    try {
+      const insights = await serviceInsightsWithLlm(profile, recentTitles);
+      return { insights };
+    } catch (err) {
+      if (err instanceof LlmError) {
+        return reply.code(502).send({ error: err.message, fallback: ruleServiceInsights(profile) });
+      }
+      req.log.error(err);
+      return reply.code(502).send({ error: 'Service insights failed' });
+    }
+  });
+
+  app.post('/:id/reclassify', async (req, reply) => {
+    const auth = requireAuth(req, reply);
+    if (!auth) return;
+    const { id } = req.params as { id: string };
+    const { withReadTx: rtx, withWriteTx: wtx } = await import('../neo4j.js');
+    const { classifyWithLlm } = await import('../llm.js');
+    const pending = await rtx(async (tx) => {
+      const res = await tx.run(
+        `MATCH (e:Event {customerId: $id, status: 'active'})
+         WHERE e.domain IS NULL
+         OPTIONAL MATCH (e)-[:MENTIONS]->(s:System)
+         RETURN e.id AS id, e.title AS title, e.content AS content,
+                collect(DISTINCT s.name) AS systemNames`,
+        { id },
+      );
+      return res.records.map((r) => ({
+        id: r.get('id') as string,
+        title: r.get('title') as string,
+        content: (r.get('content') as string) ?? '',
+        systemNames: (r.get('systemNames') as string[]).filter(Boolean),
+      }));
+    });
+    let updated = 0;
+    for (const e of pending) {
+      const result = await classifyWithLlm({
+        title: e.title,
+        content: e.content,
+        systemNames: e.systemNames,
+      });
+      await wtx(async (tx) => {
+        await tx.run(
+          `MATCH (e:Event {id: $id})
+           SET e.domain = $domain,
+               e.serviceType = $serviceType,
+               e.techs = $techs,
+               e.classifiedAt = datetime(),
+               e.classifySource = $source`,
+          {
+            id: e.id,
+            domain: result.domain,
+            serviceType: result.serviceType ?? null,
+            techs: result.techs,
+            source: result.source === 'llm' ? 'llm' : 'rule',
+          },
+        );
+      });
+      updated += 1;
+    }
+    return { pending: pending.length, updated };
+  });
+
   app.post('/:id/recompute', async (req, reply) => {
     const auth = requireAuth(req, reply);
     if (!auth) return;

@@ -37,6 +37,7 @@ export async function eventRoutes(app: FastifyInstance) {
         RETURN e {
           .id, .customerId, .title, .content, .occurredAt, .tags, .status,
           .createdAt, .createdBy,
+          .domain, .serviceType, .techs, .classifySource,
           supersedes: supersedes,
           supersededBy: supersededBy
         } AS event,
@@ -50,6 +51,7 @@ export async function eventRoutes(app: FastifyInstance) {
         return {
           ...ev,
           tags: (ev.tags as string[] | null) ?? [],
+          techs: (ev.techs as string[] | null) ?? [],
           customerName: (r.get('customerName') as string | null) ?? undefined,
           systemNames: (r.get('systemNames') as string[]).filter(Boolean),
         };
@@ -69,9 +71,32 @@ export async function eventRoutes(app: FastifyInstance) {
         occurredAt: z.string().min(1),
         tags: z.array(z.string()).default([]),
         systemNames: z.array(z.string()).default([]),
+        domain: z.string().optional(),
+        serviceType: z.string().optional(),
+        techs: z.array(z.string()).optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid body' });
+
+    const { classifyWithLlm } = await import('../llm.js');
+    const { normalizeDomain, normalizeServiceType, normalizeTech } = await import('@zhinu/shared');
+    let domain = normalizeDomain(parsed.data.domain);
+    let serviceType = normalizeServiceType(parsed.data.serviceType);
+    let techs = (parsed.data.techs ?? []).map((t) => normalizeTech(t)).filter(Boolean);
+    let classifySource: 'human' | 'llm' | 'rule' | undefined;
+    if (domain) {
+      classifySource = 'human';
+    } else {
+      const classified = await classifyWithLlm({
+        title: parsed.data.title,
+        content: parsed.data.content,
+        systemNames: parsed.data.systemNames,
+      });
+      domain = classified.domain;
+      serviceType = (serviceType ?? classified.serviceType ?? null) as typeof serviceType;
+      techs = techs.length ? techs : classified.techs;
+      classifySource = classified.source === 'llm' ? 'llm' : 'rule';
+    }
 
     const id = randomUUID();
     const created = await withWriteTx(async (tx) => {
@@ -89,6 +114,11 @@ export async function eventRoutes(app: FastifyInstance) {
           occurredAt: $occurredAt,
           tags: $tags,
           status: 'active',
+          domain: $domain,
+          serviceType: $serviceType,
+          techs: $techs,
+          classifiedAt: datetime(),
+          classifySource: $classifySource,
           createdAt: datetime(),
           createdBy: $createdBy
         })
@@ -102,6 +132,10 @@ export async function eventRoutes(app: FastifyInstance) {
           content: parsed.data.content,
           occurredAt: parsed.data.occurredAt,
           tags: parsed.data.tags,
+          domain,
+          serviceType: (serviceType ?? null) as string | null,
+          techs,
+          classifySource: classifySource ?? null,
           createdBy: auth.userId,
         },
       );
@@ -131,8 +165,96 @@ export async function eventRoutes(app: FastifyInstance) {
       auth.userId,
     );
     return {
-      event: { id, ...parsed.data, status: 'active' },
+      event: {
+        id,
+        ...parsed.data,
+        domain,
+        serviceType,
+        techs,
+        classifySource,
+        status: 'active',
+      },
       needsRecompute: true,
+    };
+  });
+
+  app.post('/:id/classify', async (req, reply) => {
+    const auth = requireAuth(req, reply);
+    if (!auth) return;
+    const { id } = req.params as { id: string };
+    const parsed = z
+      .object({
+        domain: z.string().optional(),
+        serviceType: z.string().optional(),
+        techs: z.array(z.string()).optional(),
+        useLlm: z.boolean().optional(),
+      })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid body' });
+
+    const { withReadTx: rtx, withWriteTx: wtx } = await import('../neo4j.js');
+    const { classifyWithLlm } = await import('../llm.js');
+    const { normalizeDomain, normalizeServiceType, normalizeTech } = await import('@zhinu/shared');
+
+    const current = await rtx(async (tx) => {
+      const res = await tx.run(
+        `MATCH (e:Event {id: $id, status: 'active'})
+         OPTIONAL MATCH (e)-[:MENTIONS]->(s:System)
+         RETURN e.id AS id, e.title AS title, e.content AS content,
+                collect(DISTINCT s.name) AS systemNames`,
+        { id },
+      );
+      const rec = res.records[0];
+      if (!rec) return null;
+      return {
+        id: rec.get('id') as string,
+        title: rec.get('title') as string,
+        content: (rec.get('content') as string) ?? '',
+        systemNames: (rec.get('systemNames') as string[]).filter(Boolean),
+      };
+    });
+    if (!current) return reply.code(404).send({ error: 'Event not found' });
+
+    let domain = normalizeDomain(parsed.data.domain);
+    let serviceType = normalizeServiceType(parsed.data.serviceType);
+    let techs = (parsed.data.techs ?? []).map((t) => normalizeTech(t)).filter(Boolean);
+    let source: string;
+    if (domain) {
+      source = 'human';
+    } else if (parsed.data.useLlm !== false) {
+      const classified = await classifyWithLlm({
+        title: current.title,
+        content: current.content,
+        systemNames: current.systemNames,
+      });
+      domain = classified.domain;
+      serviceType = (serviceType ?? classified.serviceType ?? null) as typeof serviceType;
+      techs = techs.length ? techs : classified.techs;
+      source = classified.source === 'llm' ? 'llm' : 'rule';
+    } else {
+      return reply.code(400).send({ error: 'domain required when useLlm=false' });
+    }
+
+    await wtx(async (tx) => {
+      await tx.run(
+        `MATCH (e:Event {id: $id})
+         SET e.domain = $domain,
+             e.serviceType = $serviceType,
+             e.techs = $techs,
+             e.classifiedAt = datetime(),
+             e.classifySource = $source`,
+        {
+          id,
+          domain,
+          serviceType: (serviceType ?? null) as string | null,
+          techs,
+          source,
+        },
+      );
+    });
+
+    return {
+      event: { id, domain, serviceType, techs, classifySource: source },
     };
   });
 
@@ -147,9 +269,31 @@ export async function eventRoutes(app: FastifyInstance) {
         occurredAt: z.string().min(1),
         tags: z.array(z.string()).default([]),
         systemNames: z.array(z.string()).default([]),
+        domain: z.string().optional(),
+        serviceType: z.string().optional(),
+        techs: z.array(z.string()).optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid body' });
+
+    const { classifyWithLlm } = await import('../llm.js');
+    const { normalizeDomain, normalizeServiceType, normalizeTech } = await import('@zhinu/shared');
+    let domain = normalizeDomain(parsed.data.domain);
+    let serviceType = normalizeServiceType(parsed.data.serviceType);
+    let techs = (parsed.data.techs ?? []).map((t) => normalizeTech(t)).filter(Boolean);
+    let classifySource: string | undefined;
+    if (domain) classifySource = 'human';
+    else {
+      const classified = await classifyWithLlm({
+        title: parsed.data.title,
+        content: parsed.data.content,
+        systemNames: parsed.data.systemNames,
+      });
+      domain = classified.domain;
+      serviceType = (serviceType ?? classified.serviceType ?? null) as typeof serviceType;
+      techs = techs.length ? techs : classified.techs;
+      classifySource = classified.source === 'llm' ? 'llm' : 'rule';
+    }
 
     const newId = randomUUID();
     const result = await withWriteTx(async (tx) => {
@@ -173,6 +317,11 @@ export async function eventRoutes(app: FastifyInstance) {
            occurredAt: $occurredAt,
            tags: $tags,
            status: 'active',
+           domain: $domain,
+           serviceType: $serviceType,
+           techs: $techs,
+           classifiedAt: datetime(),
+           classifySource: $classifySource,
            createdAt: datetime(),
            createdBy: $createdBy
          })
@@ -187,6 +336,10 @@ export async function eventRoutes(app: FastifyInstance) {
           content: parsed.data.content,
           occurredAt: parsed.data.occurredAt,
           tags: parsed.data.tags,
+          domain,
+          serviceType: (serviceType ?? null) as string | null,
+          techs,
+          classifySource: classifySource ?? null,
           createdBy: auth.userId,
         },
       );
