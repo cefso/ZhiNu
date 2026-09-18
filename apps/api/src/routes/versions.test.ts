@@ -8,7 +8,7 @@ import type { FastifyInstance } from 'fastify';
 
 const skip = !process.env.NEO4J_PASSWORD;
 
-let app: FastifyInstance;
+let app!: FastifyInstance;
 
 async function loginAsAdmin(app: FastifyInstance) {
   const email = process.env.ADMIN_EMAIL ?? 'admin@zhinu.local';
@@ -43,9 +43,8 @@ before(async () => {
 });
 
 after(async () => {
-  if (skip) return;
-  await app.close();
-  await closeDriver();
+  if (app) await app.close();
+  if (!skip) await closeDriver();
 });
 
 test('portrait versions snapshot, diff, restore', { skip }, async () => {
