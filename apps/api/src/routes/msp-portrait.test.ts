@@ -13,7 +13,7 @@ let cookie = '';
 
 async function loginAsAdmin(app: FastifyInstance) {
   const email = process.env.ADMIN_EMAIL ?? 'admin@zhinu.local';
-  const password = process.env.ADMIN_PASSWORD ?? 'zhinu-test-admin-pass';
+  const password = process.env.ADMIN_PASSWORD ?? 'change-me-admin';
   await app.inject({ method: 'POST', url: '/api/auth/bootstrap' });
   await withSession(async (s) => {
     const hash = await bcrypt.hash(password, 10);
