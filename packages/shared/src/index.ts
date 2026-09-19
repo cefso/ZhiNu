@@ -1,3 +1,5 @@
+export * from './taxonomy.js';
+
 export type Role = 'admin' | 'member';
 
 export type PortraitDimension =
@@ -48,6 +50,11 @@ export interface WorkEvent {
   status: EventStatus;
   createdAt: string;
   createdBy: string;
+  domain?: string;
+  serviceType?: string;
+  techs?: string[];
+  classifiedAt?: string;
+  classifySource?: string;
   supersedes?: string;
   supersededBy?: string;
 }
@@ -111,4 +118,62 @@ export interface GraphNeighbor {
   id: string;
   label: string;
   relation: string;
+}
+
+export interface CustomerListRow {
+  id: string;
+  name: string;
+  company?: string;
+  serviceCount: number;
+  classifiedCount: number;
+  pendingClassify: number;
+  activityLevel: string;
+  topTechs: string[];
+  topDomains: string[];
+  labels: string[];
+  lastServiceAt?: string;
+  archetype?: string;
+}
+
+export interface CustomerProfile {
+  customer: { id: string; name: string; company?: string };
+  summary: {
+    serviceCount: number;
+    classifiedCount: number;
+    pendingClassify: number;
+    spanMonths: number;
+    firstServiceAt?: string;
+    lastServiceAt?: string;
+    activityLevel: string;
+  };
+  domains: { key: string; label: string; count: number; share: number }[];
+  serviceTypes: { key: string; label: string; count: number; share: number }[];
+  techs: { name: string; count: number; domain?: string }[];
+  traits: {
+    serviceFrequency: number;
+    faultDependency: number;
+    changeActivity: number;
+    consultDependency: number;
+    labels: string[];
+  };
+  trend: {
+    windowDays: number;
+    current: { total: number; byDomain: Record<string, number> };
+    previous: { total: number; byDomain: Record<string, number> };
+    deltas: { domain: string; current: number; previous: number; changePct: number }[];
+  };
+  archetype: { title: string; summary: string; source: 'rule' | 'llm' };
+  behaviorSummary?: {
+    monthly: { month: string; total: number }[];
+  };
+  systems?: { name: string; count: number }[];
+}
+
+export interface ServiceInsight {
+  narrative: string[];
+  characteristics: string[];
+  archetype: string;
+  caveats: string[];
+  generatedAt: string;
+  source: 'llm' | 'rule';
 }

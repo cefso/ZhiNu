@@ -5,7 +5,10 @@ import LoginPage from './pages/Login';
 import OverviewPage from './pages/Overview';
 import CustomersPage from './pages/Customers';
 import PortraitPage from './pages/Portrait';
+import BehaviorPage from './pages/Behavior';
 import TimelinePage from './pages/Timeline';
+import AnalyticsPage from './pages/Analytics';
+import InsightsPage from './pages/Insights';
 import InvitesPage from './pages/Invites';
 import SettingsPage from './pages/Settings';
 import './styles.css';
@@ -22,10 +25,12 @@ const NAV = [
   { to: '/', label: '总览', match: (p: string) => p === '/' },
   {
     to: '/customers',
-    label: '客户管理',
+    label: '客户列表',
     match: (p: string) => p === '/customers' || p.startsWith('/customers/'),
   },
-  { to: '/timeline', label: '工作时间线', match: (p: string) => p.startsWith('/timeline') },
+  { to: '/timeline', label: '服务记录', match: (p: string) => p.startsWith('/timeline') },
+  { to: '/analytics', label: '多维分析', match: (p: string) => p.startsWith('/analytics') },
+  { to: '/insights', label: '画像洞察', match: (p: string) => p.startsWith('/insights') },
   {
     to: '/invites',
     label: '邀请码',
@@ -133,8 +138,20 @@ export default function App() {
           element={me ? <PortraitPage /> : <Navigate to="/login" replace />}
         />
         <Route
+          path="/customers/:id/behavior"
+          element={me ? <BehaviorPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
           path="/timeline"
           element={me ? <TimelinePage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/analytics"
+          element={me ? <AnalyticsPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/insights"
+          element={me ? <InsightsPage /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/invites"
@@ -144,7 +161,9 @@ export default function App() {
         />
         <Route
           path="/settings"
-          element={me ? <SettingsPage /> : <Navigate to="/login" replace />}
+          element={
+            me?.user.role === 'admin' ? <SettingsPage /> : <Navigate to="/" replace />
+          }
         />
       </Routes>
     </Shell>

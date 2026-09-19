@@ -12,6 +12,9 @@ import { insightRoutes, noteRoutes } from './routes/insights.js';
 import { statsRoutes } from './routes/stats.js';
 import { versionRoutes } from './routes/versions.js';
 import { settingsRoutes } from './routes/settings.js';
+import { taxonomyRoutes } from './routes/taxonomy.js';
+import { analyticsRoutes } from './routes/analytics.js';
+import { seedRoutes } from './routes/seed.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -48,6 +51,9 @@ export async function buildApp() {
   await app.register(statsRoutes, { prefix: '/api/stats' });
   await app.register(versionRoutes, { prefix: '/api' });
   await app.register(settingsRoutes, { prefix: '/api' });
+  await app.register(taxonomyRoutes, { prefix: '/api/taxonomy' });
+  await app.register(analyticsRoutes, { prefix: '/api/analytics' });
+  await app.register(seedRoutes, { prefix: '/api' });
   await app.register(customerRoutes, { prefix: '/api/customers' });
   await app.register(eventRoutes, { prefix: '/api/events' });
   await app.register(insightRoutes, { prefix: '/api' });
